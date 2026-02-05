@@ -17,42 +17,29 @@ module.exports = (sequelize) => {
             onDelete: 'CASCADE'
         },
         name: {
-            type: DataTypes.STRING(180),
+            type: DataTypes.STRING(100),
             allowNull: false
         },
         description: {
             type: DataTypes.TEXT,
             allowNull: true
         },
-        status: {
-            type: DataTypes.STRING(20),
-            defaultValue: 'active',
-            validate: {
-                isIn: [['active', 'on_hold', 'completed', 'cancelled']]
-            }
-        },
-        priority: {
-            type: DataTypes.STRING(10),
-            defaultValue: 'medium',
-            validate: {
-                isIn: [['low', 'medium', 'high', 'urgent']]
-            }
+        color: {
+            type: DataTypes.STRING(7),
+            allowNull: true
         },
         start_date: {
-            type: DataTypes.DATEONLY,
+            type: DataTypes.DATE,
             allowNull: true
         },
-        due_date: {
-            type: DataTypes.DATEONLY,
+        end_date: {
+            type: DataTypes.DATE,
             allowNull: true
         },
-        created_by: {
-            type: DataTypes.UUID,
-            allowNull: false,
-            references: {
-                model: 'users',
-                key: 'id'
-            }
+        settings: {
+            type: DataTypes.JSONB,
+            defaultValue: {},
+            allowNull: false
         },
         archived_at: {
             type: DataTypes.DATE,
@@ -60,23 +47,20 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'projects',
+        timestamps: true,
+        underscored: true,
         indexes: [
             { fields: ['workspace_id'] },
-            { fields: ['status'] },
-            { fields: ['created_by'] },
-            { fields: ['due_date'] }
+            { fields: ['archived_at'] },
+            { fields: ['created_at'] }
         ]
     });
+
 
     Project.associate = (models) => {
         Project.belongsTo(models.Workspace, {
             foreignKey: 'workspace_id',
             as: 'workspace'
-        });
-
-        Project.belongsTo(models.User, {
-            foreignKey: 'created_by',
-            as: 'creator'
         });
 
         Project.hasMany(models.ProjectMember, {

@@ -20,7 +20,12 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING(50),
             allowNull: false
         },
-        order_no: {
+        color: {
+            type: DataTypes.STRING(7),
+            allowNull: true,
+            defaultValue: '#94A3B8'
+        },
+        position: {
             type: DataTypes.INTEGER,
             allowNull: false,
             defaultValue: 0
@@ -31,13 +36,14 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'task_statuses',
-        updatedAt: false,
+        timestamps: true,
+        underscored: true,
         indexes: [
             {
                 unique: true,
                 fields: ['project_id', 'name']
             },
-            { fields: ['project_id', 'order_no'] }
+            { fields: ['project_id', 'position'] }
         ]
     });
 
