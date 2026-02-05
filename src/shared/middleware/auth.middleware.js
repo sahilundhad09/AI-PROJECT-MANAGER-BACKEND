@@ -39,7 +39,10 @@ const authMiddleware = async (req, res, next) => {
         }
 
         // Attach user to request
-        req.user = user;
+        req.user = {
+            ...user.toJSON(),
+            userId: user.id // For backward compatibility
+        };
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {

@@ -8,51 +8,34 @@ module.exports = (sequelize) => {
             primaryKey: true
         },
         name: {
-            type: DataTypes.STRING(160),
+            type: DataTypes.STRING(100),
             allowNull: false
         },
-        slug: {
-            type: DataTypes.STRING(120),
-            allowNull: false,
-            unique: true
-        },
-        owner_id: {
-            type: DataTypes.UUID,
-            allowNull: false,
-            references: {
-                model: 'users',
-                key: 'id'
-            }
-        },
-        plan: {
-            type: DataTypes.STRING(50),
-            defaultValue: 'free',
-            validate: {
-                isIn: [['free', 'pro', 'enterprise']]
-            }
+        description: {
+            type: DataTypes.TEXT,
+            allowNull: true
         },
         logo_url: {
-            type: DataTypes.TEXT,
+            type: DataTypes.STRING(500),
             allowNull: true
         },
         settings: {
             type: DataTypes.JSONB,
             defaultValue: {}
+        },
+        deleted_at: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
     }, {
         tableName: 'workspaces',
-        indexes: [
-            { fields: ['slug'] },
-            { fields: ['owner_id'] }
-        ]
+        timestamps: true,
+        underscored: true,
+        paranoid: false // We handle soft delete manually with deleted_at
     });
 
-    Workspace.associate = (models) => {
-        Workspace.belongsTo(models.User, {
-            foreignKey: 'owner_id',
-            as: 'owner'
-        });
 
+    Workspace.associate = (models) => {
         Workspace.hasMany(models.WorkspaceMember, {
             foreignKey: 'workspace_id',
             as: 'members'

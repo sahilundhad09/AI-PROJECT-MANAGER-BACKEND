@@ -12,8 +12,7 @@ const requireWorkspaceRole = (allowedRoles = []) => {
             const membership = await WorkspaceMember.findOne({
                 where: {
                     workspace_id: workspaceId,
-                    user_id: userId,
-                    status: 'active'
+                    user_id: userId
                 }
             });
 
@@ -55,7 +54,7 @@ const requireProjectRole = (allowedRoles = []) => {
                 include: [{
                     model: require('../../database/models').WorkspaceMember,
                     as: 'workspaceMember',
-                    where: { user_id: userId, status: 'active' }
+                    where: { user_id: userId }
                 }]
             });
 
@@ -102,8 +101,7 @@ const requireWorkspaceOwner = async (req, res, next) => {
             where: {
                 workspace_id: workspaceId,
                 user_id: userId,
-                role: 'owner',
-                status: 'active'
+                role: 'owner'
             }
         });
 
@@ -121,8 +119,38 @@ const requireWorkspaceOwner = async (req, res, next) => {
     }
 };
 
+/**
+ * Check if user is a member of the workspace (any role)
+ */
+const requireWorkspaceMembership = async (req, res, next) => {
+    try {
+        const { workspaceId } = req.params;
+        const userId = req.user.id;
+
+        const membership = await WorkspaceMember.findOne({
+            where: {
+                workspace_id: workspaceId,
+                user_id: userId
+            }
+        });
+
+        if (!membership) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not a member of this workspace'
+            });
+        }
+
+        req.workspaceMembership = membership;
+        next();
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     requireWorkspaceRole,
     requireProjectRole,
-    requireWorkspaceOwner
+    requireWorkspaceOwner,
+    requireWorkspaceMembership
 };

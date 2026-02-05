@@ -26,18 +26,9 @@ module.exports = (sequelize) => {
             onDelete: 'CASCADE'
         },
         role: {
-            type: DataTypes.STRING(20),
+            type: DataTypes.ENUM('owner', 'admin', 'member'),
             allowNull: false,
-            validate: {
-                isIn: [['owner', 'admin', 'manager', 'member']]
-            }
-        },
-        status: {
-            type: DataTypes.STRING(20),
-            defaultValue: 'active',
-            validate: {
-                isIn: [['active', 'inactive']]
-            }
+            defaultValue: 'member'
         },
         joined_at: {
             type: DataTypes.DATE,
@@ -45,6 +36,8 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'workspace_members',
+        timestamps: true,
+        underscored: true,
         indexes: [
             {
                 unique: true,
