@@ -33,7 +33,6 @@ db.TaskStatus = require('./taskStatus.model')(sequelize);
 db.Task = require('./task.model')(sequelize);
 db.TaskAssignee = require('./taskAssignee.model')(sequelize);
 db.TaskTag = require('./taskTag.model')(sequelize);
-db.TaskTagMap = require('./taskTagMap.model')(sequelize);
 db.TaskDependency = require('./taskDependency.model')(sequelize);
 db.Comment = require('./comment.model')(sequelize);
 db.Attachment = require('./attachment.model')(sequelize);

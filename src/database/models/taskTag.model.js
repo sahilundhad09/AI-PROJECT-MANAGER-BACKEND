@@ -7,43 +7,47 @@ module.exports = (sequelize) => {
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true
         },
-        project_id: {
+        task_id: {
             type: DataTypes.UUID,
             allowNull: false,
             references: {
-                model: 'projects',
+                model: 'tasks',
                 key: 'id'
             },
             onDelete: 'CASCADE'
         },
-        name: {
-            type: DataTypes.STRING(50),
-            allowNull: false
-        },
-        color: {
-            type: DataTypes.STRING(30),
-            defaultValue: '#10B981'
+        label_id: {
+            type: DataTypes.UUID,
+            allowNull: false,
+            references: {
+                model: 'project_labels',
+                key: 'id'
+            },
+            onDelete: 'CASCADE'
         }
     }, {
         tableName: 'task_tags',
-        timestamps: false,
+        timestamps: true,
+        underscored: true,
         indexes: [
             {
                 unique: true,
-                fields: ['project_id', 'name']
-            }
+                fields: ['task_id', 'label_id']
+            },
+            { fields: ['task_id'] },
+            { fields: ['label_id'] }
         ]
     });
 
     TaskTag.associate = (models) => {
-        TaskTag.belongsTo(models.Project, {
-            foreignKey: 'project_id',
-            as: 'project'
+        TaskTag.belongsTo(models.Task, {
+            foreignKey: 'task_id',
+            as: 'task'
         });
 
-        TaskTag.hasMany(models.TaskTagMap, {
-            foreignKey: 'tag_id',
-            as: 'taskMappings'
+        TaskTag.belongsTo(models.ProjectLabel, {
+            foreignKey: 'label_id',
+            as: 'label'
         });
     };
 

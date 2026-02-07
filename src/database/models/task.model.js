@@ -22,10 +22,11 @@ module.exports = (sequelize) => {
             references: {
                 model: 'task_statuses',
                 key: 'id'
-            }
+            },
+            onDelete: 'RESTRICT'
         },
         title: {
-            type: DataTypes.STRING(220),
+            type: DataTypes.STRING(200),
             allowNull: false
         },
         description: {
@@ -33,18 +34,9 @@ module.exports = (sequelize) => {
             allowNull: true
         },
         priority: {
-            type: DataTypes.STRING(10),
+            type: DataTypes.ENUM('low', 'medium', 'high', 'urgent'),
             defaultValue: 'medium',
-            validate: {
-                isIn: [['low', 'medium', 'high', 'urgent']]
-            }
-        },
-        task_type: {
-            type: DataTypes.STRING(20),
-            defaultValue: 'task',
-            validate: {
-                isIn: [['task', 'bug', 'story', 'epic']]
-            }
+            allowNull: false
         },
         due_date: {
             type: DataTypes.DATE,
@@ -55,16 +47,26 @@ module.exports = (sequelize) => {
             allowNull: true
         },
         estimated_hours: {
-            type: DataTypes.DECIMAL(6, 2),
+            type: DataTypes.DECIMAL(10, 2),
             allowNull: true
         },
         actual_hours: {
-            type: DataTypes.DECIMAL(6, 2),
+            type: DataTypes.DECIMAL(10, 2),
             allowNull: true
         },
-        order_no: {
+        position: {
             type: DataTypes.INTEGER,
+            allowNull: false,
             defaultValue: 0
+        },
+        created_by: {
+            type: DataTypes.UUID,
+            allowNull: false,
+            references: {
+                model: 'users',
+                key: 'id'
+            },
+            onDelete: 'SET NULL'
         },
         parent_task_id: {
             type: DataTypes.UUID,
@@ -73,34 +75,27 @@ module.exports = (sequelize) => {
                 model: 'tasks',
                 key: 'id'
             },
-            onDelete: 'SET NULL'
-        },
-        created_by: {
-            type: DataTypes.UUID,
-            allowNull: false,
-            references: {
-                model: 'users',
-                key: 'id'
-            }
-        },
-        is_archived: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: false
+            onDelete: 'CASCADE'
         },
         completed_at: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        archived_at: {
             type: DataTypes.DATE,
             allowNull: true
         }
     }, {
         tableName: 'tasks',
+        timestamps: true,
+        underscored: true,
         indexes: [
-            { fields: ['project_id'] },
-            { fields: ['status_id'] },
-            { fields: ['priority'] },
+            { fields: ['project_id', 'status_id', 'position'] },
+            { fields: ['project_id', 'archived_at'] },
             { fields: ['due_date'] },
-            { fields: ['parent_task_id'] },
             { fields: ['created_by'] },
-            { fields: ['is_archived'] }
+            { fields: ['parent_task_id'] },
+            { fields: ['priority'] }
         ]
     });
 
@@ -136,19 +131,9 @@ module.exports = (sequelize) => {
             as: 'assignees'
         });
 
-        Task.hasMany(models.Comment, {
+        Task.hasMany(models.TaskTag, {
             foreignKey: 'task_id',
-            as: 'comments'
-        });
-
-        Task.hasMany(models.Attachment, {
-            foreignKey: 'task_id',
-            as: 'attachments'
-        });
-
-        Task.hasMany(models.TaskTagMap, {
-            foreignKey: 'task_id',
-            as: 'tagMappings'
+            as: 'tags'
         });
 
         // Task dependencies

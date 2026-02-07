@@ -16,37 +16,31 @@ module.exports = (sequelize) => {
             },
             onDelete: 'CASCADE'
         },
-        user_id: {
+        project_member_id: {
             type: DataTypes.UUID,
             allowNull: false,
             references: {
-                model: 'users',
+                model: 'project_members',
                 key: 'id'
             },
             onDelete: 'CASCADE'
         },
-        assigned_by: {
-            type: DataTypes.UUID,
-            allowNull: false,
-            references: {
-                model: 'users',
-                key: 'id'
-            }
-        },
         assigned_at: {
             type: DataTypes.DATE,
+            allowNull: false,
             defaultValue: DataTypes.NOW
         }
     }, {
         tableName: 'task_assignees',
-        updatedAt: false,
+        timestamps: true,
+        underscored: true,
         indexes: [
             {
                 unique: true,
-                fields: ['task_id', 'user_id']
+                fields: ['task_id', 'project_member_id']
             },
             { fields: ['task_id'] },
-            { fields: ['user_id'] }
+            { fields: ['project_member_id'] }
         ]
     });
 
@@ -56,14 +50,9 @@ module.exports = (sequelize) => {
             as: 'task'
         });
 
-        TaskAssignee.belongsTo(models.User, {
-            foreignKey: 'user_id',
-            as: 'user'
-        });
-
-        TaskAssignee.belongsTo(models.User, {
-            foreignKey: 'assigned_by',
-            as: 'assigner'
+        TaskAssignee.belongsTo(models.ProjectMember, {
+            foreignKey: 'project_member_id',
+            as: 'projectMember'
         });
     };
 

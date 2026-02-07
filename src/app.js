@@ -55,7 +55,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/workspaces', workspaceRoutes);
 app.use('/api/v1', projectRoutes); // Project routes include /workspaces/:id/projects and /projects/:id
-app.use('/api/v1/tasks', taskRoutes);
+app.use('/api/v1', taskRoutes); // Task routes include /projects/:id/tasks and /tasks/:id
 app.use('/api/v1', collaborationRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/reports', reportingRoutes);

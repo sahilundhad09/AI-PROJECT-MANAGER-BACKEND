@@ -24,14 +24,19 @@ module.exports = (sequelize) => {
                 key: 'id'
             },
             onDelete: 'CASCADE'
+        },
+        dependency_type: {
+            type: DataTypes.ENUM('blocks', 'blocked_by'),
+            allowNull: false
         }
     }, {
         tableName: 'task_dependencies',
-        updatedAt: false,
+        timestamps: true,
+        underscored: true,
         indexes: [
             {
                 unique: true,
-                fields: ['task_id', 'depends_on_task_id']
+                fields: ['task_id', 'depends_on_task_id', 'dependency_type']
             },
             { fields: ['task_id'] },
             { fields: ['depends_on_task_id'] }
