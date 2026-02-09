@@ -20,9 +20,20 @@ module.exports = (sequelize) => {
             type: DataTypes.TEXT,
             allowNull: false
         },
-        output: {
+        generated_tasks: {
             type: DataTypes.JSONB,
-            allowNull: false
+            allowNull: false,
+            defaultValue: []
+        },
+        accepted_task_ids: {
+            type: DataTypes.JSONB,
+            allowNull: true,
+            defaultValue: []
+        },
+        tokens_used: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            defaultValue: 0
         },
         created_by: {
             type: DataTypes.UUID,

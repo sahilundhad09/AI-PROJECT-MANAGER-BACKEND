@@ -23,9 +23,22 @@ module.exports = (sequelize) => {
                 isIn: [['daily', 'weekly', 'sprint', 'on_demand']]
             }
         },
-        summary: {
+        content: {
             type: DataTypes.TEXT,
             allowNull: false
+        },
+        date_range_start: {
+            type: DataTypes.DATEONLY,
+            allowNull: true
+        },
+        date_range_end: {
+            type: DataTypes.DATEONLY,
+            allowNull: true
+        },
+        tokens_used: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            defaultValue: 0
         },
         created_by: {
             type: DataTypes.UUID,
