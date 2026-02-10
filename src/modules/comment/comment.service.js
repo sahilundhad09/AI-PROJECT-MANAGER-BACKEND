@@ -1,4 +1,5 @@
-const { Comment, Task, User, ProjectMember, WorkspaceMember } = require('../../database/models');
+const { Comment, Task, User, ProjectMember, WorkspaceMember, TaskAssignee } = require('../../database/models');
+const emailService = require('../../shared/services/email.service');
 
 class CommentService {
     /**
@@ -49,6 +50,40 @@ class CommentService {
             message: data.message,
             parent_comment_id: data.parent_comment_id || null
         });
+
+        // Send email notifications to task assignees (non-blocking)
+        const commenter = await User.findByPk(userId);
+        const assignees = await TaskAssignee.findAll({
+            where: { task_id: taskId },
+            include: [{
+                model: ProjectMember,
+                as: 'projectMember',
+                include: [{
+                    model: WorkspaceMember,
+                    as: 'workspaceMember',
+                    include: [{
+                        model: User,
+                        as: 'user'
+                    }]
+                }]
+            }]
+        });
+
+        // Send email to each assignee (except the commenter)
+        for (const assignee of assignees) {
+            const assigneeUser = assignee.projectMember?.workspaceMember?.user;
+            if (assigneeUser && assigneeUser.id !== userId && assigneeUser.email) {
+                emailService.sendCommentNotification(
+                    assigneeUser.email,
+                    commenter.name,
+                    task.title,
+                    data.message,
+                    taskId
+                ).catch(err => {
+                    console.error('Failed to send comment notification:', err.message);
+                });
+            }
+        }
 
         // Return comment with user info
         return await this.getCommentById(comment.id);

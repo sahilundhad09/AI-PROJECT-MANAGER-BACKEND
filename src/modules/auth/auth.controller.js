@@ -1,4 +1,5 @@
 const authService = require('./auth.service');
+const emailService = require('../../shared/services/email.service');
 
 class AuthController {
     /**
@@ -27,6 +28,18 @@ class AuthController {
         try {
             const { email, password } = req.body;
             const result = await authService.login(email, password);
+
+            // Send login notification (non-blocking)
+            const ipAddress = req.ip || req.connection.remoteAddress;
+            const userAgent = req.get('user-agent');
+            emailService.sendLoginNotification(
+                result.user.email,
+                result.user.name,
+                ipAddress,
+                userAgent
+            ).catch(err => {
+                console.error('Failed to send login notification:', err.message);
+            });
 
             res.json({
                 success: true,

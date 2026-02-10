@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { User, RefreshToken } = require('../../database/models');
 const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn } = require('../../config/jwt');
 const { hashPassword, comparePassword, generateToken } = require('../../shared/utils/helpers');
+const emailService = require('../../shared/services/email.service');
 
 class AuthService {
     /**
@@ -30,6 +31,11 @@ class AuthService {
 
         // Generate tokens
         const tokens = await this.generateTokens(user.id);
+
+        // Send welcome email (non-blocking)
+        emailService.sendWelcomeEmail(user.email, user.name).catch(err => {
+            console.error('Failed to send welcome email:', err.message);
+        });
 
         return {
             user: {

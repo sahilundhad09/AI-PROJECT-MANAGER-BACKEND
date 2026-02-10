@@ -12,6 +12,7 @@ const {
     sequelize
 } = require('../../database/models');
 const { Op } = require('sequelize');
+const emailService = require('../../shared/services/email.service');
 
 class TaskService {
     /**
@@ -688,6 +689,7 @@ class TaskService {
         }
 
         // Add assignees (ignore duplicates)
+        const newlyAssignedMembers = [];
         for (const memberId of memberIds) {
             try {
                 await TaskAssignee.create({
@@ -696,10 +698,50 @@ class TaskService {
                 }, {
                     returning: ['id', 'task_id', 'project_member_id', 'assigned_at', 'created_at', 'updated_at']
                 });
+                newlyAssignedMembers.push(memberId);
             } catch (error) {
                 // Ignore duplicate key errors (unique constraint violation)
                 if (error.name !== 'SequelizeUniqueConstraintError') {
                     throw error;
+                }
+            }
+        }
+
+        // Send email notifications to newly assigned members (non-blocking)
+        if (newlyAssignedMembers.length > 0) {
+            const assignedBy = await User.findOne({
+                include: [{
+                    model: WorkspaceMember,
+                    as: 'workspaceMemberships',
+                    where: { id: workspaceMember.id }
+                }]
+            });
+
+            const project = await Project.findByPk(task.project_id);
+
+            for (const memberId of newlyAssignedMembers) {
+                const projectMember = await ProjectMember.findOne({
+                    where: { id: memberId },
+                    include: [{
+                        model: WorkspaceMember,
+                        as: 'workspaceMember',
+                        include: [{
+                            model: User,
+                            as: 'user'
+                        }]
+                    }]
+                });
+
+                if (projectMember?.workspaceMember?.user?.email) {
+                    emailService.sendTaskAssignment(
+                        projectMember.workspaceMember.user.email,
+                        task.title,
+                        project.name,
+                        assignedBy.name,
+                        task.id
+                    ).catch(err => {
+                        console.error('Failed to send task assignment email:', err.message);
+                    });
                 }
             }
         }

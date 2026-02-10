@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { Workspace, WorkspaceMember, WorkspaceInvitation, User } = require('../../database/models');
 const { Op } = require('sequelize');
+const emailService = require('../../shared/services/email.service');
 
 class WorkspaceService {
     /**
@@ -402,8 +403,19 @@ class WorkspaceService {
             expires_at: expiresAt
         });
 
-        // TODO: Send email notification (if SMTP configured)
-        // await this.sendInvitationEmail(email, token, workspace);
+        // Get workspace and inviter details for email
+        const workspace = await Workspace.findByPk(workspaceId);
+        const inviter = await User.findByPk(userId);
+
+        // Send invitation email (non-blocking)
+        emailService.sendWorkspaceInvite(
+            email,
+            workspace.name,
+            inviter.name,
+            token
+        ).catch(err => {
+            console.error('Failed to send invitation email:', err.message);
+        });
 
         return {
             id: invitation.id,
