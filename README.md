@@ -18,10 +18,13 @@ Backend API for the AI Project Manager SaaS application built with Node.js, Expr
 - ✅ **Authentication System** - JWT-based auth with refresh tokens
 - ✅ **User Management** - Registration, login, profile management
 - ✅ **Security** - Password hashing, token revocation, rate limiting
-- 🚧 **Workspace Management** - Multi-tenant workspace support (coming soon)
-- 🚧 **Project Management** - Project CRUD with member management (coming soon)
-- 🚧 **Task Management** - Kanban board with drag-and-drop (coming soon)
-- 🚧 **AI Integration** - OpenAI-powered task generation and chatbot (coming soon)
+- ✅ **Workspace Management** - Multi-tenant workspace support with RBAC
+- ✅ **Project Management** - Project CRUD with member management and custom labels
+- ✅ **Task Management** - Kanban board support, subtasks, dependencies, and tags
+- ✅ **AI Integration** - Groq-powered task generation, summaries, and smart assistant
+- ✅ **Collaboration** - Real-time comments, file attachments, and activity logs
+- ✅ **Notifications** - Integrated in-app and email notification system
+- ✅ **Analytics** - Comprehensive project, workspace, and user performance reporting
 
 ## Prerequisites
 
@@ -30,54 +33,18 @@ Backend API for the AI Project Manager SaaS application built with Node.js, Expr
 - Redis 7
 - Docker & Docker Compose (optional)
 
-## Environment Variables
+## Configuration
 
-Create a `.env` file in the root directory:
+The backend requires several environment variables for database connection, JWT, AI services, and email. 
 
+Copy the example environment file and fill in your values:
 ```bash
-# Environment
-NODE_ENV=development
-PORT=5000
-FRONTEND_URL=http://localhost:3000
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5433
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=ai_project_manager
-
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6380
-
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key
-JWT_REFRESH_SECRET=your-super-secret-refresh-key
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# OpenAI API (for AI features)
-OPENAI_API_KEY=your-openai-api-key
-
-# Cloudinary (for file uploads)
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
-# Email Configuration (SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-EMAIL_FROM=noreply@aiprojectmanager.com
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
+cp ../.env.example .env
 ```
 
-## Installation
+Refer to the root `.env.example` for the full list of required variables.
+
+## Installation & Running
 
 ```bash
 # Install dependencies
@@ -90,95 +57,11 @@ npx sequelize-cli db:migrate
 npm run dev
 ```
 
-## Using Docker
-
-```bash
-# Start PostgreSQL and Redis
-docker compose up -d postgres redis
-
-# Run migrations
-npm run migrate
-
-# Start server
-npm run dev
-```
-
 ## API Documentation
 
-### Authentication Endpoints
+For a complete list of all 80+ API endpoints, including request/response examples and Postman guide, please refer to:
 
-#### Register User
-```http
-POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "SecurePassword123"
-}
-```
-
-#### Login
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "password": "SecurePassword123"
-}
-```
-
-#### Get Profile (Protected)
-```http
-GET /api/v1/auth/profile
-Authorization: Bearer {accessToken}
-```
-
-#### Update Profile (Protected)
-```http
-PUT /api/v1/auth/profile
-Authorization: Bearer {accessToken}
-Content-Type: application/json
-
-{
-  "name": "Updated Name",
-  "phone": "+1234567890"
-}
-```
-
-#### Change Password (Protected)
-```http
-POST /api/v1/auth/change-password
-Authorization: Bearer {accessToken}
-Content-Type: application/json
-
-{
-  "currentPassword": "OldPassword123",
-  "newPassword": "NewPassword456"
-}
-```
-
-#### Refresh Token
-```http
-POST /api/v1/auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "your-refresh-token"
-}
-```
-
-#### Logout
-```http
-POST /api/v1/auth/logout
-Content-Type: application/json
-
-{
-  "refreshToken": "your-refresh-token"
-}
-```
+👉 **[COMPLETE_API_GUIDE.md](../COMPLETE_API_GUIDE.md)**
 
 ## Project Structure
 
@@ -186,26 +69,13 @@ Content-Type: application/json
 backend/
 ├── src/
 │   ├── config/           # Configuration files
-│   │   ├── database.js
-│   │   ├── redis.js
-│   │   └── jwt.js
 │   ├── database/
 │   │   ├── models/       # Sequelize models
 │   │   └── migrations/   # Database migrations
-│   ├── modules/          # Feature modules
-│   │   ├── auth/
-│   │   ├── workspace/
-│   │   ├── project/
-│   │   ├── task/
-│   │   ├── collaboration/
-│   │   ├── ai/
-│   │   └── reporting/
-│   ├── shared/           # Shared utilities
-│   │   ├── middleware/
-│   │   └── utils/
+│   ├── modules/          # Feature modules (Auth, Workspace, Project, Task, AI, etc.)
+│   ├── shared/           # Shared utilities & middleware
 │   ├── app.js           # Express app setup
 │   └── server.js        # Server entry point
-├── .env.example
 ├── .gitignore
 ├── .sequelizerc
 ├── Dockerfile
@@ -215,21 +85,7 @@ backend/
 
 ## Database Models
 
-- **User** - User accounts and authentication
-- **RefreshToken** - JWT refresh token management
-- **Workspace** - Multi-tenant workspaces
-- **WorkspaceMember** - Workspace membership with RBAC
-- **WorkspaceInvitation** - Workspace invitations
-- **Project** - Projects within workspaces
-- **ProjectMember** - Project membership
-- **Task** - Tasks with Kanban support
-- **TaskStatus** - Custom Kanban columns
-- **Comment** - Task comments
-- **Attachment** - File attachments
-- **ActivityLog** - Audit trail
-- **Notification** - In-app notifications
-- **AIChatSession** - AI chat conversations
-- **AIChatMessage** - AI chat messages
+The system uses a comprehensive schema with 23+ tables including `Users`, `Workspaces`, `Projects`, `Tasks`, `ActivityLogs`, `Notifications`, and `AI` related tables.
 
 ## Scripts
 
@@ -249,9 +105,8 @@ npm start           # Start production server
 
 - Password hashing with bcrypt
 - JWT access & refresh tokens
-- Token revocation on password change
-- Rate limiting to prevent brute force
-- CORS protection
+- Role-based access control (RBAC)
+- Rate limiting & CORS protection
 - Helmet security headers
 - Input validation with Zod
 - SQL injection protection (Sequelize ORM)
@@ -268,10 +123,9 @@ npm start           # Start production server
 
 This project is licensed under the MIT License.
 
+---
+
 ## Author
 
-Sahil Undhad
-
-## Support
-
-For support, email sahilundhad09@gmail.com
+**Sahil Undhad**
+[sahilundhad09@gmail.com](mailto:sahilundhad09@gmail.com)
