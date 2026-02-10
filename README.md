@@ -1,4 +1,4 @@
-# AI Project Manager - Backend
+# AI Project Manager(Cronos AI) - Backend
 
 Backend API for the AI Project Manager SaaS application built with Node.js, Express, PostgreSQL, and Redis.
 
@@ -128,4 +128,4 @@ This project is licensed under the MIT License.
 ## Author
 
 **Sahil Undhad**
-[sahilundhad09@gmail.com](mailto:sahilundhad09@gmail.com)
+[sahilundhad09@gmail.com](mailto:sahilundhad304@gmail.com)
