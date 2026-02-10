@@ -67,12 +67,6 @@ module.exports = (sequelize) => {
             as: 'workspaceMemberships'
         });
 
-        // User has many task assignments
-        User.hasMany(models.TaskAssignee, {
-            foreignKey: 'user_id',
-            as: 'taskAssignments'
-        });
-
         // User has many comments
         User.hasMany(models.Comment, {
             foreignKey: 'user_id',

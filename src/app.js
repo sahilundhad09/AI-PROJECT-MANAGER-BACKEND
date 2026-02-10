@@ -19,6 +19,8 @@ const taskRoutes = require('./modules/task/task.routes');
 const collaborationRoutes = require('./modules/collaboration/collaboration.routes');
 const aiRoutes = require('./modules/ai/ai.routes');
 const reportingRoutes = require('./modules/reporting/reporting.routes');
+const notificationRoutes = require('./modules/notification/notification.routes');
+const analyticsRoutes = require('./modules/analytics/analytics.routes');
 
 const app = express();
 
@@ -59,6 +61,8 @@ app.use('/api/v1', taskRoutes); // Task routes include /projects/:id/tasks and /
 app.use('/api/v1', collaborationRoutes);
 app.use('/api/v1', aiRoutes); // AI routes include /projects/:id/ai/* and /ai/*
 app.use('/api/v1/reports', reportingRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1', analyticsRoutes); // Analytics routes include /projects/:id/analytics, /workspaces/:id/analytics, /users/me/performance
 
 // 404 handler
 app.use((req, res) => {

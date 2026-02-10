@@ -1,5 +1,6 @@
 const { Comment, Task, User, ProjectMember, WorkspaceMember, TaskAssignee } = require('../../database/models');
 const emailService = require('../../shared/services/email.service');
+const notificationService = require('../notification/notification.service');
 
 class CommentService {
     /**
@@ -73,6 +74,7 @@ class CommentService {
         for (const assignee of assignees) {
             const assigneeUser = assignee.projectMember?.workspaceMember?.user;
             if (assigneeUser && assigneeUser.id !== userId && assigneeUser.email) {
+                // Send email notification
                 emailService.sendCommentNotification(
                     assigneeUser.email,
                     commenter.name,
@@ -81,6 +83,16 @@ class CommentService {
                     taskId
                 ).catch(err => {
                     console.error('Failed to send comment notification:', err.message);
+                });
+
+                // Create in-app notification
+                notificationService.notifyComment(
+                    assigneeUser.id,
+                    commenter.name,
+                    task.title,
+                    taskId
+                ).catch(err => {
+                    console.error('Failed to create comment notification:', err.message);
                 });
             }
         }

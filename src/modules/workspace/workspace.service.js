@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { Workspace, WorkspaceMember, WorkspaceInvitation, User } = require('../../database/models');
 const { Op } = require('sequelize');
 const emailService = require('../../shared/services/email.service');
+const notificationService = require('../notification/notification.service');
 
 class WorkspaceService {
     /**
@@ -416,6 +417,17 @@ class WorkspaceService {
         ).catch(err => {
             console.error('Failed to send invitation email:', err.message);
         });
+
+        // Create in-app notification if user exists
+        if (existingUser) {
+            notificationService.notifyWorkspaceInvite(
+                existingUser.id,
+                workspace.name,
+                inviter.name
+            ).catch(err => {
+                console.error('Failed to create workspace invitation notification:', err.message);
+            });
+        }
 
         return {
             id: invitation.id,

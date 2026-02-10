@@ -13,6 +13,7 @@ const {
 } = require('../../database/models');
 const { Op } = require('sequelize');
 const emailService = require('../../shared/services/email.service');
+const notificationService = require('../notification/notification.service');
 
 class TaskService {
     /**
@@ -733,14 +734,27 @@ class TaskService {
                 });
 
                 if (projectMember?.workspaceMember?.user?.email) {
+                    const assigneeUser = projectMember.workspaceMember.user;
+
+                    // Send email notification
                     emailService.sendTaskAssignment(
-                        projectMember.workspaceMember.user.email,
+                        assigneeUser.email,
                         task.title,
                         project.name,
                         assignedBy.name,
                         task.id
                     ).catch(err => {
                         console.error('Failed to send task assignment email:', err.message);
+                    });
+
+                    // Create in-app notification
+                    notificationService.notifyTaskAssignment(
+                        assigneeUser.id,
+                        task.title,
+                        assignedBy.name,
+                        task.id
+                    ).catch(err => {
+                        console.error('Failed to create task assignment notification:', err.message);
                     });
                 }
             }
