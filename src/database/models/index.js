@@ -43,6 +43,7 @@ db.AIChatMessage = require('./aiChatMessage.model')(sequelize);
 db.AITaskGeneration = require('./aiTaskGeneration.model')(sequelize);
 db.AIProjectSummary = require('./aiProjectSummary.model')(sequelize);
 db.AIToolLog = require('./aiToolLog.model')(sequelize);
+db.ProjectInvitation = require('./projectInvitation.model')(sequelize);
 
 // Define associations
 Object.keys(db).forEach((modelName) => {

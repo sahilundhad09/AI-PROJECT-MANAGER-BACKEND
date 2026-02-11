@@ -57,6 +57,26 @@ class AnalyticsController {
             next(error);
         }
     }
+
+    /**
+     * Analyze workspace with AI
+     * GET /api/v1/workspaces/:workspaceId/analyze
+     */
+    async analyzeWorkspace(req, res, next) {
+        try {
+            const analysis = await analyticsService.analyzeWorkspace(
+                req.params.workspaceId,
+                req.user.id
+            );
+
+            res.json({
+                success: true,
+                data: analysis
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new AnalyticsController();

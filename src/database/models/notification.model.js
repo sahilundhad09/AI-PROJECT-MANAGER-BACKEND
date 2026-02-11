@@ -20,7 +20,7 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING(50),
             allowNull: false,
             validate: {
-                isIn: [['task_assigned', 'task_due', 'comment_mention', 'workspace_invite', 'project_update']]
+                isIn: [['task_assigned', 'task_due', 'comment_mention', 'workspace_invite', 'project_invite', 'project_invite_accepted', 'project_update']]
             }
         },
         title: {

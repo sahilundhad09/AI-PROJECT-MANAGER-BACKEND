@@ -29,6 +29,12 @@ router.get(
     notificationController.getUnreadCount
 );
 
+// Legacy alias for unread count
+router.get(
+    '/unread/count',
+    notificationController.getUnreadCount
+);
+
 /**
  * @route   PATCH /api/v1/notifications/:id/read
  * @desc    Mark notification as read

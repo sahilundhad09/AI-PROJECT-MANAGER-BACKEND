@@ -172,4 +172,24 @@ router.delete(
     projectController.deleteProjectLabel
 );
 
+// ========== Project Invitation Routes ==========
+
+// Invite member to project
+router.post(
+    '/projects/:projectId/invites',
+    projectController.inviteProjectMember
+);
+
+// Get project invitations
+router.get(
+    '/projects/:projectId/invites',
+    projectController.getProjectInvitations
+);
+
+// Accept project invitation
+router.post(
+    '/projects/:projectId/invites/:invitationId/accept',
+    projectController.acceptProjectInvitation
+);
+
 module.exports = router;

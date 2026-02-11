@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { Workspace, WorkspaceMember, WorkspaceInvitation, User } = require('../../database/models');
+const { Workspace, WorkspaceMember, WorkspaceInvitation, User, Notification, sequelize } = require('../../database/models');
 const { Op } = require('sequelize');
 const emailService = require('../../shared/services/email.service');
 const notificationService = require('../notification/notification.service');
@@ -423,7 +423,8 @@ class WorkspaceService {
             notificationService.notifyWorkspaceInvite(
                 existingUser.id,
                 workspace.name,
-                inviter.name
+                inviter.name,
+                token
             ).catch(err => {
                 console.error('Failed to create workspace invitation notification:', err.message);
             });
@@ -496,9 +497,24 @@ class WorkspaceService {
             error.statusCode = 404;
             throw error;
         }
+        if (invitation.status === 'accepted') {
+            const user = await User.findByPk(userId);
+            if (user && user.email === invitation.email) {
+                // Check if already a member
+                const membership = await WorkspaceMember.findOne({
+                    where: { workspace_id: invitation.workspace_id, user_id: userId }
+                });
+                if (membership) {
+                    return this.getWorkspaceById(invitation.workspace_id, userId);
+                }
+            }
+            const error = new Error('Invitation has already been processed');
+            error.statusCode = 400;
+            throw error;
+        }
 
         if (invitation.status !== 'pending') {
-            const error = new Error('Invitation has already been processed');
+            const error = new Error('Invitation is no longer active');
             error.statusCode = 400;
             throw error;
         }
@@ -531,20 +547,40 @@ class WorkspaceService {
             throw error;
         }
 
-        // Add user to workspace
-        await WorkspaceMember.create({
-            workspace_id: invitation.workspace_id,
-            user_id: userId,
-            role: invitation.role
-        });
+        const transaction = await sequelize.transaction();
+        try {
+            // Add user to workspace
+            await WorkspaceMember.create({
+                workspace_id: invitation.workspace_id,
+                user_id: userId,
+                role: invitation.role
+            }, { transaction });
 
-        // Update invitation status
-        await invitation.update({
-            status: 'accepted',
-            accepted_at: new Date()
-        });
+            // Update invitation status
+            await invitation.update({
+                status: 'accepted',
+                accepted_at: new Date()
+            }, { transaction });
 
-        return this.getWorkspaceById(invitation.workspace_id, userId);
+            // Mark notification as read if exists
+            await Notification.update(
+                { is_read: true },
+                {
+                    where: {
+                        user_id: userId,
+                        type: 'workspace_invite',
+                        is_read: false
+                    },
+                    transaction
+                }
+            );
+
+            await transaction.commit();
+            return this.getWorkspaceById(invitation.workspace_id, userId);
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
 
     /**

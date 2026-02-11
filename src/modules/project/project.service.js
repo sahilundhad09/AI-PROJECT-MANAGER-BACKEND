@@ -6,9 +6,14 @@ const {
     WorkspaceMember,
     User,
     Workspace,
+    ProjectInvitation,
+    Notification,
     sequelize
 } = require('../../database/models');
 const { Op } = require('sequelize');
+const notificationService = require('../notification/notification.service');
+const { v4: uuidv4, validate: validateUuid } = require('uuid');
+const activityService = require('../activity/activity.service');
 
 class ProjectService {
     /**
@@ -122,13 +127,30 @@ class ProjectService {
             });
 
             let taskCount = 0;
+            let completedTaskCount = 0;
             try {
-                taskCount = await sequelize.models.Task?.count({
-                    where: { project_id: project.id }
-                }) || 0;
+                if (sequelize.models.Task && sequelize.models.TaskStatus) {
+                    const tasks = await sequelize.models.Task.findAll({
+                        where: { project_id: project.id },
+                        include: [{
+                            model: sequelize.models.TaskStatus,
+                            as: 'status',
+                            attributes: ['name']
+                        }],
+                        attributes: ['id']
+                    });
+
+                    taskCount = tasks.length;
+                    completedTaskCount = tasks.filter(t =>
+                        t.status?.name.toLowerCase().includes('done') ||
+                        t.status?.name.toLowerCase().includes('completed')
+                    ).length;
+                }
             } catch (error) {
-                taskCount = 0;
+                console.error('Error calculating progress:', error);
             }
+
+            const progress = taskCount > 0 ? Math.round((completedTaskCount / taskCount) * 100) : 0;
 
             const projectData = project.toJSON();
             const userMembership = projectData.members?.[0];
@@ -143,6 +165,8 @@ class ProjectService {
                 archived_at: projectData.archived_at,
                 member_count: memberCount,
                 task_count: taskCount,
+                completed_task_count: completedTaskCount,
+                progress,
                 your_role: userMembership?.project_role || null,
                 joined_at: userMembership?.added_at || null,
                 created_at: projectData.created_at,
@@ -201,27 +225,40 @@ class ProjectService {
             }
         });
 
-        // Get counts
-        const memberCount = await ProjectMember.count({
-            where: { project_id: projectId }
-        });
-
+        // Get counts and progress
         let taskCount = 0;
+        let completedTaskCount = 0;
         try {
-            taskCount = await sequelize.models.Task?.count({
-                where: { project_id: projectId }
-            }) || 0;
+            if (sequelize.models.Task) {
+                const tasks = await sequelize.models.Task.findAll({
+                    where: { project_id: projectId },
+                    include: [{
+                        model: TaskStatus,
+                        as: 'status',
+                        attributes: ['name']
+                    }],
+                    attributes: ['id']
+                });
+
+                taskCount = tasks.length;
+                completedTaskCount = tasks.filter(t =>
+                    t.status?.name.toLowerCase().includes('done') ||
+                    t.status?.name.toLowerCase().includes('completed')
+                ).length;
+            }
         } catch (error) {
-            // Task table doesn't exist yet
-            taskCount = 0;
+            console.error('Error calculating project progress:', error);
         }
 
+        const progress = taskCount > 0 ? Math.round((completedTaskCount / taskCount) * 100) : 0;
         const projectData = project.toJSON();
 
         return {
             ...projectData,
             member_count: memberCount,
             task_count: taskCount,
+            completed_task_count: completedTaskCount,
+            progress,
             your_role: projectMember?.project_role || null,
             joined_at: projectMember?.added_at || null
         };
@@ -768,6 +805,211 @@ class ProjectService {
         }
 
         return true;
+    }
+
+    /**
+     * Invite workspace member to project
+     */
+    async inviteMember(projectId, invitedWorkspaceMemberId, role, userId) {
+        // Only Lead can invite
+        await this.checkProjectPermission(projectId, userId, ['lead']);
+
+        const project = await Project.findByPk(projectId);
+
+        // Verify invited member is in the same workspace
+        const workspaceMember = await WorkspaceMember.findByPk(invitedWorkspaceMemberId);
+        if (!workspaceMember || workspaceMember.workspace_id !== project.workspace_id) {
+            throw new Error('Invitee must be a member of the workspace');
+        }
+
+        // Check if already in project
+        const existingMember = await ProjectMember.findOne({
+            where: { project_id: projectId, workspace_member_id: invitedWorkspaceMemberId }
+        });
+        if (existingMember) {
+            throw new Error('User is already a member of this project');
+        }
+
+        // Check for existing pending invitation
+        const existingInvite = await ProjectInvitation.findOne({
+            where: {
+                project_id: projectId,
+                workspace_member_id: invitedWorkspaceMemberId,
+                status: 'pending'
+            }
+        });
+        if (existingInvite) {
+            throw new Error('User already has a pending invitation to this project');
+        }
+
+        // Create invitation with pre-generated UUID to ensure signal integrity
+        const invitationId = uuidv4();
+        const invitation = await ProjectInvitation.create({
+            id: invitationId,
+            project_id: projectId,
+            workspace_member_id: invitedWorkspaceMemberId,
+            invited_by: userId,
+            role: role || 'member',
+            status: 'pending'
+        });
+
+        // Trigger notification
+        const inviter = await User.findByPk(userId);
+        await notificationService.notifyProjectInvite(
+            workspaceMember.user_id,
+            project.name,
+            inviter.name,
+            project.id,
+            invitationId
+        );
+
+        return invitation;
+    }
+
+    /**
+     * Get project invitations
+     */
+    async getInvitations(projectId, userId) {
+        const project = await Project.findByPk(projectId);
+        if (!project) throw new Error('Project not found');
+
+        // Check if user is workspace member
+        const workspaceMember = await WorkspaceMember.findOne({
+            where: { workspace_id: project.workspace_id, user_id: userId }
+        });
+        if (!workspaceMember) throw new Error('Access denied');
+
+        // Check if project member
+        const projectMember = await ProjectMember.findOne({
+            where: { project_id: projectId, workspace_member_id: workspaceMember.id }
+        });
+
+        const whereClause = { project_id: projectId };
+
+        // If not a lead, only see your own pending invitations
+        if (!projectMember || projectMember.project_role !== 'lead') {
+            // Check if workspace admin/owner
+            if (!['owner', 'admin'].includes(workspaceMember.role)) {
+                whereClause.workspace_member_id = workspaceMember.id;
+                whereClause.status = 'pending';
+            }
+        }
+
+        return await ProjectInvitation.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: WorkspaceMember,
+                    as: 'invitee',
+                    include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'avatar_url'] }]
+                },
+                {
+                    model: User,
+                    as: 'inviter',
+                    attributes: ['id', 'name']
+                }
+            ],
+            order: [['created_at', 'DESC']]
+        });
+    }
+
+    /**
+     * Accept project invitation
+     */
+    async acceptInvitation(invitationId, userId, projectId = null) {
+        let invite = null;
+
+        if (invitationId && validateUuid(invitationId)) {
+            invite = await ProjectInvitation.findByPk(invitationId);
+        }
+
+        // Signal Healer: If lookup by ID fails and we have a project ID, try finding pending invite for this user
+        if (!invite && projectId) {
+            console.log(`[Neural Healer] Fragmented signal detected for user ${userId} in project ${projectId}. Attempting recovery...`);
+            invite = await ProjectInvitation.findOne({
+                where: {
+                    project_id: projectId,
+                    status: 'pending'
+                },
+                include: [{
+                    model: WorkspaceMember,
+                    as: 'invitee',
+                    where: { user_id: userId }
+                }]
+            });
+
+            if (invite) {
+                console.log(`[Neural Healer] Signal recovered. Localized invitation: ${invite.id}`);
+            }
+        }
+
+        if (!invite) {
+            throw new Error('Invitation not found or no longer active');
+        }
+
+        if (invite.status === 'accepted') {
+            const workspaceMember = await WorkspaceMember.findByPk(invite.workspace_member_id);
+            if (workspaceMember.user_id === userId) {
+                return { message: 'Already joined project' };
+            }
+            throw new Error('Invitation has already been accepted by another specialist');
+        }
+
+        if (invite.status !== 'pending') {
+            throw new Error('Invitation is no longer active');
+        }
+
+        const workspaceMember = await WorkspaceMember.findByPk(invite.workspace_member_id);
+        if (workspaceMember.user_id !== userId) {
+            throw new Error('This invitation was not sent to you');
+        }
+
+        const transaction = await sequelize.transaction();
+        try {
+            // Join project
+            await ProjectMember.create({
+                project_id: invite.project_id,
+                workspace_member_id: invite.workspace_member_id,
+                project_role: invite.role,
+                added_at: new Date()
+            }, { transaction });
+
+            // Update invitation
+            await invite.update({
+                status: 'accepted',
+                accepted_at: new Date()
+            }, { transaction });
+
+            // Mark notification as read if exists
+            await Notification.update(
+                { is_read: true },
+                {
+                    where: {
+                        user_id: userId,
+                        type: 'project_invite',
+                        is_read: false
+                    },
+                    transaction
+                }
+            );
+
+            await transaction.commit();
+
+            // Trigger notification to inviter (lead)
+            const specialist = await User.findByPk(userId);
+            const project = await Project.findByPk(invite.project_id);
+            await notificationService.notifyProjectInviteAccepted(
+                invite.invited_by,
+                specialist.name,
+                project.name,
+                project.id
+            );
+
+            return { message: 'Joined project successfully' };
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
 }
 

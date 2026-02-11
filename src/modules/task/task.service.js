@@ -45,14 +45,15 @@ class TaskService {
                 throw new Error('Insufficient permissions to create tasks');
             }
 
-            // Get default status (To Do) if not specified
-            let statusId = data.status_id;
+            // Force default status (To Do) even if specified, as per mission protocol
+            const defaultStatus = await TaskStatus.findOne({
+                where: { project_id: projectId, is_default: true },
+                order: [['position', 'ASC']]
+            });
+            let statusId = defaultStatus?.id;
+
             if (!statusId) {
-                const defaultStatus = await TaskStatus.findOne({
-                    where: { project_id: projectId, is_default: true },
-                    order: [['position', 'ASC']]
-                });
-                statusId = defaultStatus?.id;
+                throw new Error('Project initialization failed: Default column (To Do) not found');
             }
 
             // Get max position in status column
@@ -574,6 +575,16 @@ class TaskService {
 
             await transaction.commit();
 
+            // Log activity
+            const activityService = require('../activity/activity.service');
+            await activityService.logActivity(project.workspace_id, userId, 'TASK_MOVED', {
+                task_id: taskId,
+                project_id: project.id,
+                task_title: task.title,
+                old_status: oldStatus.name,
+                new_status: newStatus.name
+            });
+
             return await this.getTaskById(taskId, userId);
         } catch (error) {
             if (!transaction.finished) {
@@ -673,8 +684,11 @@ class TaskService {
             where: { project_id: task.project_id, workspace_member_id: workspaceMember.id }
         });
 
-        if (!projectMember || projectMember.project_role === 'viewer') {
-            throw new Error('Insufficient permissions');
+        if (!projectMember || !['lead'].includes(projectMember.project_role)) {
+            // Check if user is workspace owner/admin
+            if (!['owner', 'admin'].includes(workspaceMember.role)) {
+                throw new Error('Only project leads or workspace admins can assign/unassign members');
+            }
         }
 
         // Verify all members belong to project
@@ -705,6 +719,39 @@ class TaskService {
                 if (error.name !== 'SequelizeUniqueConstraintError') {
                     throw error;
                 }
+            }
+        }
+
+        // Auto-progression: If task is in "To Do", move to "In Progress"
+        const defaultStatus = await TaskStatus.findOne({
+            where: { project_id: task.project_id, is_default: true },
+            order: [['position', 'ASC']]
+        });
+
+        if (task.status_id === defaultStatus?.id && newlyAssignedMembers.length > 0) {
+            const inProgressStatus = await TaskStatus.findOne({
+                where: {
+                    project_id: task.project_id,
+                    name: { [Op.iLike]: '%progress%' }
+                }
+            });
+
+            if (inProgressStatus) {
+                await task.update({ status_id: inProgressStatus.id });
+                // Log activity for auto-transition
+                const { ActivityLog } = require('../../database/models'); // Ensure ActivityLog is available
+                await ActivityLog.create({
+                    workspace_id: project.workspace_id,
+                    project_id: project.id,
+                    actor_id: userId,
+                    action: 'task_status_changed',
+                    description: `Neural Orchestrator: Auto-moved "${task.title}" to ${inProgressStatus.name} due to assignment.`,
+                    meta: {
+                        task_id: task.id,
+                        from_status: defaultStatus.name,
+                        to_status: inProgressStatus.name
+                    }
+                });
             }
         }
 

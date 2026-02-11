@@ -36,4 +36,15 @@ router.get(
     analyticsController.getUserPerformance
 );
 
+/**
+ * @route   GET /api/v1/workspaces/:workspaceId/analyze
+ * @desc    Analyze workspace with AI
+ * @access  Private (workspace member)
+ */
+router.get(
+    '/workspaces/:workspaceId/analyze',
+    authenticate,
+    analyticsController.analyzeWorkspace
+);
+
 module.exports = router;

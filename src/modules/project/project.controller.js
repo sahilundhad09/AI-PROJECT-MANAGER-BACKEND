@@ -308,6 +308,53 @@ const deleteProjectLabel = async (req, res, next) => {
     }
 };
 
+const inviteProjectMember = async (req, res, next) => {
+    try {
+        const { projectId } = req.params;
+        const { workspace_member_id, project_role } = req.body;
+        const userId = req.user.id;
+        const invitation = await projectService.inviteMember(projectId, workspace_member_id, project_role, userId);
+
+        res.status(201).json({
+            success: true,
+            message: 'Invitation sent successfully',
+            data: invitation
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getProjectInvitations = async (req, res, next) => {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id;
+        const invitations = await projectService.getInvitations(projectId, userId);
+
+        res.json({
+            success: true,
+            data: invitations
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const acceptProjectInvitation = async (req, res, next) => {
+    try {
+        const { invitationId, projectId } = req.params;
+        const userId = req.user.id;
+        const result = await projectService.acceptInvitation(invitationId, userId, projectId);
+
+        res.json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     // Project CRUD
     createProject,
@@ -334,5 +381,10 @@ module.exports = {
     createProjectLabel,
     getProjectLabels,
     updateProjectLabel,
-    deleteProjectLabel
+    deleteProjectLabel,
+
+    // Project Invitations
+    inviteProjectMember,
+    getProjectInvitations,
+    acceptProjectInvitation
 };

@@ -156,13 +156,13 @@ class NotificationService {
     /**
      * Helper: Create workspace invitation notification
      */
-    async notifyWorkspaceInvite(userId, workspaceName, inviterName) {
+    async notifyWorkspaceInvite(userId, workspaceName, inviterName, token) {
         return this.createNotification(
             userId,
             'workspace_invite',
             'Workspace Invitation',
             `${inviterName} invited you to join "${workspaceName}"`,
-            { workspace: workspaceName, inviter: inviterName }
+            { workspace: workspaceName, inviter: inviterName, token }
         );
     }
 
@@ -188,7 +188,38 @@ class NotificationService {
             'task_due',
             'Task Due Soon',
             `"${taskTitle}" is due on ${new Date(dueDate).toLocaleDateString()}`,
-            { taskId, dueDate }
+        );
+    }
+
+    /**
+     * Helper: Create project invitation notification
+     */
+    async notifyProjectInvite(userId, projectName, inviterName, projectId, invitationId) {
+        console.log(`[Diagnostic] Broadcasting project_invite for user ${userId}. InvitationId: ${invitationId}`);
+        return this.createNotification(
+            userId,
+            'project_invite',
+            'Project Invitation',
+            `${inviterName} invited you to join mission: "${projectName}"`,
+            {
+                projectId: projectId,
+                projectName: projectName,
+                inviter: inviterName,
+                invitationId: invitationId
+            }
+        );
+    }
+
+    /**
+     * Helper: Create notification when project invitation is accepted
+     */
+    async notifyProjectInviteAccepted(leadUserId, specialistName, projectName, projectId) {
+        return this.createNotification(
+            leadUserId,
+            'project_invite_accepted',
+            'Mission Authorized',
+            `${specialistName} has joined "${projectName}"`,
+            { projectId, projectName, specialist: specialistName }
         );
     }
 }

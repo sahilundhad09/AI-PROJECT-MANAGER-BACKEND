@@ -110,14 +110,89 @@ class AnalyticsService {
             order: [['created_at', 'DESC']]
         });
 
+        // Detailed Status Breakdown across workspace
+        const statusCounts = await Task.findAll({
+            attributes: [
+                [sequelize.literal(`CASE 
+                        WHEN completed_at IS NOT NULL THEN 'Done'
+                        WHEN "status"."name" ILIKE '%progress%' THEN 'In Progress'
+                        ELSE 'To Do'
+                    END`), 'status_group'],
+                [sequelize.fn('COUNT', sequelize.col('Task.id')), 'count']
+            ],
+            include: [{
+                model: require('../../database/models').TaskStatus,
+                as: 'status',
+                attributes: [],
+                include: [{
+                    model: Project,
+                    as: 'project',
+                    where: { workspace_id: workspaceId },
+                    attributes: []
+                }]
+            }],
+            group: ['status_group'],
+            raw: true
+        });
+
+        const statusBreakdown = {
+            todo: parseInt(statusCounts.find(s => s.status_group === 'To Do')?.count || 0),
+            inProgress: parseInt(statusCounts.find(s => s.status_group === 'In Progress')?.count || 0),
+            done: parseInt(statusCounts.find(s => s.status_group === 'Done')?.count || 0)
+        };
+
         return {
             projectCount,
             activeProjects,
             totalTasks,
             completedTasks,
             completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+            statusBreakdown,
             memberCount,
             recentActivity
+        };
+    }
+
+    /**
+     * Analyze workspace with AI
+     */
+    async analyzeWorkspace(workspaceId, userId) {
+        const stats = await this.getWorkspaceAnalytics(workspaceId, userId);
+
+        const projects = await Project.findAll({
+            where: { workspace_id: workspaceId },
+            include: [{
+                model: Task,
+                as: 'tasks',
+                attributes: ['status', 'priority']
+            }]
+        });
+
+        const prompt = `You are a project management AI. Analyze this workspace:
+        Projects: ${stats.projectCount}
+        Total Tasks: ${stats.totalTasks}
+        Completed: ${stats.completedTasks}
+        Completion Rate: ${stats.completionRate}%
+        Active Projects: ${stats.activeProjects}
+        
+        Project Breakdown:
+        ${projects.map(p => `- ${p.name}: ${p.tasks.length} tasks`).join('\n')}
+        
+        Provide:
+        1. A high-level executive summary (2 sentences).
+        2. Top 3 bottlenecks or risks.
+        3. Strategic recommendation for the next 7 days.
+        
+        Format as clear, actionable points.`;
+
+        const aiResponse = await require('../../shared/services/groq.service').generateContent(prompt, {
+            temperature: 0.5
+        });
+
+        return {
+            analysis: aiResponse.text,
+            stats: stats,
+            generated_at: new Date()
         };
     }
 
@@ -234,6 +309,21 @@ class AnalyticsService {
                 created_at: task.created_at
             }));
 
+        // Pending Tasks (Assigned and not completed)
+        const pendingTasks = await Task.findAll({
+            where: {
+                id: taskIds,
+                completed_at: null
+            },
+            include: [{
+                model: Project,
+                as: 'project',
+                attributes: ['id', 'name']
+            }],
+            limit: 10,
+            order: [['created_at', 'DESC']]
+        });
+
         return {
             tasksAssigned,
             tasksCompleted,
@@ -241,7 +331,8 @@ class AnalyticsService {
             onTimeDelivery,
             averageCompletionTime: avgCompletionTime,
             tasksByPriority,
-            recentTasks
+            recentTasks,
+            pendingTasks
         };
     }
 

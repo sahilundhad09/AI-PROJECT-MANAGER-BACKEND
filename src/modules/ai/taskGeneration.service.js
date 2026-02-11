@@ -76,11 +76,7 @@ Return ONLY a JSON array with no additional text. Example format:
             tokens_used: aiResponse.tokensUsed
         });
 
-        return {
-            generation_id: generation.id,
-            tasks: generatedTasks,
-            tokens_used: aiResponse.tokensUsed
-        };
+        return generation;
     }
 
     /**

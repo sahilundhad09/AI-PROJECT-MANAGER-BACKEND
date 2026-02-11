@@ -39,9 +39,11 @@ const authMiddleware = async (req, res, next) => {
         }
 
         // Attach user to request
+        const userData = user.toJSON();
         req.user = {
-            ...user.toJSON(),
-            userId: user.id // For backward compatibility
+            ...userData,
+            id: user.id,
+            userId: user.id
         };
         next();
     } catch (error) {
