@@ -1,4 +1,4 @@
-const { Attachment, Task, User, ProjectMember, WorkspaceMember } = require('../../database/models');
+const { Attachment, Task, User, ProjectMember, WorkspaceMember, Project } = require('../../database/models');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -12,14 +12,23 @@ class AttachmentService {
         }
 
         // Verify task exists and user has access
-        const task = await Task.findByPk(taskId);
+        const task = await Task.findByPk(taskId, {
+            include: [{
+                model: Project,
+                as: 'project',
+                attributes: ['id', 'workspace_id']
+            }]
+        });
         if (!task) {
             throw new Error('Task not found');
         }
 
         // Verify user is a member of the project
         const workspaceMember = await WorkspaceMember.findOne({
-            where: { user_id: userId }
+            where: {
+                user_id: userId,
+                workspace_id: task.project.workspace_id
+            }
         });
 
         if (!workspaceMember) {
@@ -56,13 +65,22 @@ class AttachmentService {
      */
     async getTaskAttachments(taskId, userId) {
         // Verify task exists and user has access
-        const task = await Task.findByPk(taskId);
+        const task = await Task.findByPk(taskId, {
+            include: [{
+                model: Project,
+                as: 'project',
+                attributes: ['id', 'workspace_id']
+            }]
+        });
         if (!task) {
             throw new Error('Task not found');
         }
 
         const workspaceMember = await WorkspaceMember.findOne({
-            where: { user_id: userId }
+            where: {
+                user_id: userId,
+                workspace_id: task.project.workspace_id
+            }
         });
 
         if (!workspaceMember) {

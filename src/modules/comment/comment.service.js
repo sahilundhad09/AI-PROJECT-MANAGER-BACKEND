@@ -1,4 +1,4 @@
-const { Comment, Task, User, ProjectMember, WorkspaceMember, TaskAssignee } = require('../../database/models');
+const { Comment, Task, User, ProjectMember, WorkspaceMember, TaskAssignee, Project } = require('../../database/models');
 const emailService = require('../../shared/services/email.service');
 const notificationService = require('../notification/notification.service');
 
@@ -8,14 +8,23 @@ class CommentService {
      */
     async createComment(taskId, userId, data) {
         // Verify task exists and user has access
-        const task = await Task.findByPk(taskId);
+        const task = await Task.findByPk(taskId, {
+            include: [{
+                model: Project,
+                as: 'project',
+                attributes: ['id', 'workspace_id']
+            }]
+        });
         if (!task) {
             throw new Error('Task not found');
         }
 
         // Verify user is a member of the project
         const workspaceMember = await WorkspaceMember.findOne({
-            where: { user_id: userId }
+            where: {
+                user_id: userId,
+                workspace_id: task.project.workspace_id
+            }
         });
 
         if (!workspaceMember) {
@@ -106,13 +115,22 @@ class CommentService {
      */
     async getTaskComments(taskId, userId) {
         // Verify task exists and user has access
-        const task = await Task.findByPk(taskId);
+        const task = await Task.findByPk(taskId, {
+            include: [{
+                model: Project,
+                as: 'project',
+                attributes: ['id', 'workspace_id']
+            }]
+        });
         if (!task) {
             throw new Error('Task not found');
         }
 
         const workspaceMember = await WorkspaceMember.findOne({
-            where: { user_id: userId }
+            where: {
+                user_id: userId,
+                workspace_id: task.project.workspace_id
+            }
         });
 
         if (!workspaceMember) {
