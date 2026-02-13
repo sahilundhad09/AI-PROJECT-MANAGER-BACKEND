@@ -24,8 +24,8 @@ const refreshTokenSchema = z.object({
 // Update profile validation schema
 const updateProfileSchema = z.object({
     name: z.string().min(2).max(120).optional(),
-    phone: z.string().max(20).optional(),
-    avatar_url: z.string().url().optional()
+    phone: z.string().max(20).optional().nullable().or(z.literal('')),
+    avatar_url: z.string().url().optional().nullable().or(z.literal(''))
 });
 
 // Change password validation schema
