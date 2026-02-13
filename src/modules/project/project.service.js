@@ -52,9 +52,9 @@ class ProjectService {
 
             // Create default task statuses
             const defaultStatuses = [
-                { name: 'To Do', color: '#94A3B8', position: 0, is_default: true },
-                { name: 'In Progress', color: '#3B82F6', position: 1, is_default: false },
-                { name: 'Done', color: '#10B981', position: 2, is_default: false }
+                { name: 'To Do', color: '#94A3B8', position: 0, is_default: true, is_completed: false },
+                { name: 'In Progress', color: '#3B82F6', position: 1, is_default: false, is_completed: false },
+                { name: 'Done', color: '#10B981', position: 2, is_default: false, is_completed: true }
             ];
 
             for (const status of defaultStatuses) {
@@ -135,16 +135,13 @@ class ProjectService {
                         include: [{
                             model: sequelize.models.TaskStatus,
                             as: 'status',
-                            attributes: ['name']
+                            attributes: ['name', 'is_completed']
                         }],
                         attributes: ['id']
                     });
 
                     taskCount = tasks.length;
-                    completedTaskCount = tasks.filter(t =>
-                        t.status?.name.toLowerCase().includes('done') ||
-                        t.status?.name.toLowerCase().includes('completed')
-                    ).length;
+                    completedTaskCount = tasks.filter(t => t.status?.is_completed).length;
                 }
             } catch (error) {
                 console.error('Error calculating progress:', error);
@@ -228,23 +225,29 @@ class ProjectService {
         // Get counts and progress
         let taskCount = 0;
         let completedTaskCount = 0;
+        let memberCount = 0;
         try {
+            // Get member count
+            const members = await ProjectMember.findAll({
+                where: { project_id: projectId },
+                attributes: ['id']
+            });
+            memberCount = members.length;
+
+            // Get task statistics
             if (sequelize.models.Task) {
                 const tasks = await sequelize.models.Task.findAll({
                     where: { project_id: projectId },
                     include: [{
                         model: TaskStatus,
                         as: 'status',
-                        attributes: ['name']
+                        attributes: ['name', 'is_completed']
                     }],
                     attributes: ['id']
                 });
 
                 taskCount = tasks.length;
-                completedTaskCount = tasks.filter(t =>
-                    t.status?.name.toLowerCase().includes('done') ||
-                    t.status?.name.toLowerCase().includes('completed')
-                ).length;
+                completedTaskCount = tasks.filter(t => t.status?.is_completed).length;
             }
         } catch (error) {
             console.error('Error calculating project progress:', error);

@@ -33,6 +33,10 @@ module.exports = (sequelize) => {
         is_default: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
+        },
+        is_completed: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false
         }
     }, {
         tableName: 'task_statuses',

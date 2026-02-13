@@ -401,6 +401,7 @@ class TaskService {
             completed_subtasks: completedSubtasks,
             assignees: taskData.assignees?.map(a => ({
                 id: a.id,
+                project_member_id: a.project_member_id,
                 user: a.projectMember?.workspaceMember?.user,
                 assigned_at: a.assigned_at
             })) || [],
@@ -499,6 +500,21 @@ class TaskService {
 
             const oldStatusId = task.status_id;
             const oldPosition = task.position;
+            const oldStatus = await TaskStatus.findByPk(oldStatusId);
+
+            // Restriction: Only assigned users (or leads/admins) can mark a task as completed
+            if (newStatus.is_completed && !oldStatus.is_completed) {
+                const isAssignee = await TaskAssignee.findOne({
+                    where: { task_id: taskId, project_member_id: projectMember.id }
+                });
+
+                const isLeadOrAdmin = projectMember.project_role === 'lead' ||
+                    ['owner', 'admin'].includes(workspaceMember.role);
+
+                if (!isAssignee && !isLeadOrAdmin) {
+                    throw new Error('Only assigned members or project leads can mark this task as completed');
+                }
+            }
 
             // If status changed
             if (oldStatusId !== statusId) {
@@ -528,17 +544,11 @@ class TaskService {
                     }
                 );
 
-                // Check if moved to "Done" status
-                const completedAt = newStatus.name.toLowerCase().includes('done') ||
-                    newStatus.name.toLowerCase().includes('completed')
-                    ? new Date()
-                    : null;
-
                 // Update task
                 await task.update({
                     status_id: statusId,
                     position,
-                    completed_at: completedAt
+                    completed_at: newStatus.is_completed ? new Date() : null
                 }, { transaction });
             } else if (oldPosition !== position) {
                 // Same status, different position

@@ -28,7 +28,8 @@ const updateWorkspaceSchema = z.object({
         description: z.string()
             .max(500, 'Description must not exceed 500 characters')
             .trim()
-            .optional(),
+            .optional()
+            .nullable(),
         logo_url: z.string()
             .url('Invalid logo URL')
             .optional()

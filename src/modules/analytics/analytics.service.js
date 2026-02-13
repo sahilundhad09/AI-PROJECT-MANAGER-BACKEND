@@ -7,6 +7,7 @@ const {
     WorkspaceMember,
     User,
     ActivityLog,
+    TaskStatus,
     sequelize
 } = require('../../database/models');
 const { Op } = require('sequelize');
@@ -82,14 +83,18 @@ class AnalyticsService {
             }]
         });
 
-        // Get completed tasks (completed_at is not null)
         const completedTasks = await Task.count({
-            where: { completed_at: { [Op.ne]: null } },
             include: [{
-                model: Project,
-                as: 'project',
-                where: { workspace_id: workspaceId },
-                attributes: []
+                model: TaskStatus,
+                as: 'status',
+                where: { is_completed: true },
+                attributes: [],
+                include: [{
+                    model: Project,
+                    as: 'project',
+                    where: { workspace_id: workspaceId },
+                    attributes: []
+                }]
             }]
         });
 
@@ -114,7 +119,7 @@ class AnalyticsService {
         const statusCounts = await Task.findAll({
             attributes: [
                 [sequelize.literal(`CASE 
-                        WHEN completed_at IS NOT NULL THEN 'Done'
+                WHEN "status"."is_completed" = true THEN 'Done'
                         WHEN "status"."name" ILIKE '%progress%' THEN 'In Progress'
                         ELSE 'To Do'
                     END`), 'status_group'],
@@ -345,12 +350,12 @@ class AnalyticsService {
             include: [{
                 model: require('../../database/models').TaskStatus,
                 as: 'status',
-                attributes: ['name']
+                attributes: ['name', 'is_completed']
             }]
         });
 
         const total = tasks.length;
-        const completed = tasks.filter(t => t.completed_at !== null).length;
+        const completed = tasks.filter(t => t.status?.is_completed).length;
 
         // Group by status
         const byStatus = {};
