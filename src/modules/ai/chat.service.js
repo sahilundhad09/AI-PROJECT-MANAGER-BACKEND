@@ -139,21 +139,27 @@ class ChatService {
         ];
 
         // Build prompt
-        const prompt = `You are a helpful project management AI assistant.
+        const systemInstruction = `You are a professional project management AI assistant.
         
-Project Context:
+CRITICAL RULES:
+1. ONLY use 'create_task' if the user explicitly asks to create a task.
+2. ONLY use 'update_task' if the user explicitly asks to assign someone, change a status, or update task details.
+3. If the user just says "hii", "hello", or asks a general question, ONLY respond with text. DO NOT CALL ANY TOOLS.
+4. When creating tasks, describe them based on project context if possible.
+5. Be concise and actionable.`;
+
+        const prompt = `Project Context:
 ${projectContext}
 
 ${conversationHistory ? `Conversation History:\n${conversationHistory}\n` : ''}
-User: ${message}
+User Message: ${message}
 
-Provide a helpful, concise response based on the project context. Be specific and actionable.
-You can use 'create_task' for new work or 'update_task' to assign members or change statuses of existing tasks.
-If the user asks to "assign Sahil to the landing page task", look for "landing page" in the context and use 'update_task'.`;
+Action: Decide if a tool call is strictly necessary based on the User Message. If not, respond with text only.`;
 
         // Generate AI response
         const aiResponse = await groqService.generateContent(prompt, {
-            temperature: 0.7,
+            systemInstruction,
+            temperature: 0.3,
             tools: tools
         });
 
@@ -241,7 +247,6 @@ If the user asks to "assign Sahil to the landing page task", look for "landing p
         const assistantMessage = await AIChatMessage.create({
             session_id: session.id,
             role: 'assistant',
-            content: aiResponse.text,
             content: aiResponse.text
         });
 
@@ -387,31 +392,110 @@ If the user asks to "assign Sahil to the landing page task", look for "landing p
             }
         ];
 
-        const prompt = `You are a helpful project management AI assistant.
+        const systemInstruction = `You are a professional project management AI assistant.
         
-Project Context:
+CRITICAL RULES:
+1. ONLY use 'create_task' if the user explicitly asks to create a task.
+2. ONLY use 'update_task' if the user explicitly asks to assign someone, change a status, or update task details.
+3. If the user just says "hii", "hello", or asks a general question, ONLY respond with text. DO NOT CALL ANY TOOLS.
+4. When creating tasks, describe them based on project context if possible.
+5. Be concise and actionable.`;
+
+        const prompt = `Project Context:
 ${projectContext}
 
 ${conversationHistory ? `Conversation History:\n${conversationHistory}\n` : ''}
-User: ${message}
+User Message: ${message}
 
-Provide a helpful, concise response based on the project context. Be specific and actionable.
-You can use 'create_task' for new work or 'update_task' to assign members or change statuses of existing tasks.
-If the user asks to "assign Sahil to the landing page task", look for "landing page" in the context and use 'update_task'.`;
+Action: Decide if a tool call is strictly necessary based on the User Message. If not, respond with text only.`;
 
         // Stream response
         let fullResponse = '';
+        let toolCalls = [];
         const streamConfig = {
             temperature: 0.7,
             tools: tools
         };
 
-        for await (const chunk of groqService.generateContentStream(prompt, streamConfig)) {
-            // Note: In streaming mode, Groq currently doesn't always send tool_calls in chunks the same way OpenAI does 
-            // depending on the SDK version, but we'll yield the text and then check for tool calls if the stream ends 
-            // with a tool call intent. For now, we'll focus on text chunks.
-            fullResponse += chunk;
-            yield { chunk, session_id: session.id };
+        const taskService = require('../task/task.service');
+
+        for await (const data of groqService.generateContentStream(prompt, streamConfig)) {
+            if (data.type === 'text') {
+                fullResponse += data.content;
+                yield { chunk: data.content, session_id: session.id };
+            } else if (data.type === 'tool_calls') {
+                toolCalls = data.content;
+            }
+        }
+
+        // Handle Tool Calls in Streaming mode
+        if (toolCalls && toolCalls.length > 0) {
+            let toolFeedback = [];
+            for (const toolCall of toolCalls) {
+                if (toolCall.function.name === 'create_task') {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    let assignee_ids = [];
+                    if (args.assignee) {
+                        const member = members.find(m =>
+                            m.workspaceMember?.user?.name?.toLowerCase().includes(args.assignee.toLowerCase())
+                        );
+                        if (member) assignee_ids.push(member.id);
+                    }
+
+                    const task = await taskService.createTask(projectId, userId, {
+                        title: args.title,
+                        description: args.description || '',
+                        priority: args.priority || 'medium',
+                        assignee_ids
+                    });
+
+                    let msg = `Created task: "${args.title}"`;
+                    if (assignee_ids.length > 0) msg += ` and assigned to ${args.assignee}`;
+                    toolFeedback.push(msg);
+                } else if (toolCall.function.name === 'update_task') {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    let task = null;
+                    if (args.task_id) {
+                        task = await Task.findByPk(args.task_id);
+                    } else if (args.title) {
+                        task = await Task.findOne({
+                            where: { project_id: projectId, title: args.title }
+                        });
+                    }
+
+                    if (task) {
+                        let updateData = {};
+                        let feedback = [];
+                        if (args.status) {
+                            const status = await TaskStatus.findOne({
+                                where: { project_id: projectId, name: args.status }
+                            });
+                            if (status) {
+                                updateData.status_id = status.id;
+                                feedback.push(`changed status to ${status.name}`);
+                            }
+                        }
+                        await taskService.updateTask(task.id, userId, updateData);
+
+                        if (args.assignee) {
+                            const member = members.find(m =>
+                                m.workspaceMember?.user?.name?.toLowerCase().includes(args.assignee.toLowerCase())
+                            );
+                            if (member) {
+                                await taskService.assignMembers(task.id, [member.id], userId);
+                                feedback.push(`assigned to ${member.workspaceMember.user.name}`);
+                            }
+                        }
+                        toolFeedback.push(`Updated task "${task.title}": ${feedback.join(', ')}`);
+                    }
+                }
+            }
+
+            if (toolFeedback.length > 0) {
+                const feedbackMsg = `\n\n[Action System]: ${toolFeedback.join('; ')}`;
+                fullResponse += feedbackMsg;
+                yield { chunk: feedbackMsg, session_id: session.id };
+            }
         }
 
         // Save complete AI response

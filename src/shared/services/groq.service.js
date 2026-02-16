@@ -116,11 +116,36 @@ class GroqService {
 
             const stream = await this.groq.chat.completions.create(payload);
 
+            let toolCalls = [];
+
             for await (const chunk of stream) {
-                const text = chunk.choices[0]?.delta?.content || '';
-                if (text) {
-                    yield text;
+                const delta = chunk.choices[0]?.delta;
+                const text = delta?.content || '';
+
+                // Accumulate tool call deltas
+                if (delta?.tool_calls) {
+                    for (const tcDelta of delta.tool_calls) {
+                        const index = tcDelta.index;
+                        if (!toolCalls[index]) {
+                            toolCalls[index] = {
+                                id: tcDelta.id,
+                                type: 'function',
+                                function: { name: '', arguments: '' }
+                            };
+                        }
+                        if (tcDelta.function?.name) toolCalls[index].function.name += tcDelta.function.name;
+                        if (tcDelta.function?.arguments) toolCalls[index].function.arguments += tcDelta.function.arguments;
+                    }
                 }
+
+                if (text) {
+                    yield { type: 'text', content: text };
+                }
+            }
+
+            // Yield tool calls at the end
+            if (toolCalls.length > 0) {
+                yield { type: 'tool_calls', content: toolCalls.filter(Boolean) };
             }
         } catch (error) {
             if (error.message.includes('rate limit') || error.status === 429) {
