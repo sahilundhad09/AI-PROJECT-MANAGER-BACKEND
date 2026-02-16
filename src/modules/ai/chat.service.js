@@ -1,4 +1,4 @@
-const { AIChatSession, AIChatMessage, Project, Task, User, ProjectMember, WorkspaceMember } = require('../../database/models');
+const { AIChatSession, AIChatMessage, Project, Task, User, ProjectMember, WorkspaceMember, TaskAssignee, TaskStatus } = require('../../database/models');
 const groqService = require('../../shared/services/groq.service');
 
 class ChatService {
@@ -101,21 +101,141 @@ class ChatService {
             history.slice(0, -1) // Exclude the current message
         );
 
+        // Define tools for the AI
+        const tools = [
+            {
+                type: 'function',
+                function: {
+                    name: 'create_task',
+                    description: 'Create a new task in the project with optional auto-assignment.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            title: { type: 'string', description: 'Task title' },
+                            description: { type: 'string', description: 'Detailed task description' },
+                            priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Task priority' },
+                            assignee: { type: 'string', description: 'Name of the team member to assign this task to' }
+                        },
+                        required: ['title', 'priority']
+                    }
+                }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'update_task',
+                    description: 'Update an existing task in the project (e.g., assign to someone, change status).',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            task_id: { type: 'string', description: 'ID of the task to update' },
+                            title: { type: 'string', description: 'Title of the task (if ID is unknown)' },
+                            status: { type: 'string', description: 'New status name (e.g., "In Progress", "Done")' },
+                            assignee: { type: 'string', description: 'Name of the member to assign' }
+                        }
+                    }
+                }
+            }
+        ];
+
         // Build prompt
         const prompt = `You are a helpful project management AI assistant.
-
+        
 Project Context:
 ${projectContext}
 
 ${conversationHistory ? `Conversation History:\n${conversationHistory}\n` : ''}
 User: ${message}
 
-Provide a helpful, concise response based on the project context. Be specific and actionable.`;
+Provide a helpful, concise response based on the project context. Be specific and actionable.
+You can use 'create_task' for new work or 'update_task' to assign members or change statuses of existing tasks.
+If the user asks to "assign Sahil to the landing page task", look for "landing page" in the context and use 'update_task'.`;
 
         // Generate AI response
         const aiResponse = await groqService.generateContent(prompt, {
-            temperature: 0.7
+            temperature: 0.7,
+            tools: tools
         });
+
+        const taskService = require('../task/task.service');
+
+        // Handle Tool Calls
+        if (aiResponse.toolCalls) {
+            for (const toolCall of aiResponse.toolCalls) {
+                if (toolCall.function.name === 'create_task') {
+                    const args = JSON.parse(toolCall.function.arguments);
+
+                    // Resolve suggested assignee if provided
+                    let assignee_ids = [];
+                    if (args.assignee) {
+                        const member = members.find(m =>
+                            m.workspaceMember?.user?.name?.toLowerCase().includes(args.assignee.toLowerCase())
+                        );
+                        if (member) assignee_ids.push(member.id);
+                    }
+
+                    // Create the task using unified TaskService
+                    const task = await taskService.createTask(projectId, userId, {
+                        title: args.title,
+                        description: args.description || '',
+                        priority: args.priority || 'medium',
+                        assignee_ids
+                    });
+
+                    let assignmentMsg = assignee_ids.length > 0 ? ` and assigned to ${args.assignee}` : '';
+                    aiResponse.text = `I've created the task: "${args.title}"${assignmentMsg}. It's currently in the To Do column.`;
+                    if (assignee_ids.length > 0) {
+                        aiResponse.text = `I've created the task: "${args.title}"${assignmentMsg}. Since it's assigned, I've moved it to In Progress.`;
+                    }
+                } else if (toolCall.function.name === 'update_task') {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    let task = null;
+
+                    if (args.task_id) {
+                        task = await Task.findByPk(args.task_id);
+                    } else if (args.title) {
+                        task = await Task.findOne({
+                            where: { project_id: projectId, title: args.title }
+                        });
+                    }
+
+                    if (!task) {
+                        aiResponse.text = `I couldn't find the task "${args.title || args.task_id}" to update.`;
+                        continue;
+                    }
+
+                    let updateData = {};
+                    let feedback = [];
+
+                    if (args.status) {
+                        const status = await TaskStatus.findOne({
+                            where: { project_id: projectId, name: args.status }
+                        });
+                        if (status) {
+                            updateData.status_id = status.id;
+                            feedback.push(`status changed to ${status.name}`);
+                        }
+                    }
+
+                    // Perform update using unified TaskService
+                    await taskService.updateTask(task.id, userId, updateData);
+
+                    // Handle assignment separately using unified TaskService
+                    if (args.assignee) {
+                        const member = members.find(m =>
+                            m.workspaceMember?.user?.name?.toLowerCase().includes(args.assignee.toLowerCase())
+                        );
+
+                        if (member) {
+                            await taskService.assignMembers(task.id, [member.id], userId);
+                            feedback.push(`assigned to ${member.workspaceMember.user.name}`);
+                        }
+                    }
+
+                    aiResponse.text = `I've updated the task "${task.title}": ${feedback.join(', ')}.`;
+                }
+            }
+        }
 
         // Save AI message
         const assistantMessage = await AIChatMessage.create({
@@ -230,19 +350,66 @@ Provide a helpful, concise response based on the project context. Be specific an
             history.slice(0, -1)
         );
 
-        const prompt = `You are a helpful project management AI assistant.
+        // Define tools for the AI
+        const tools = [
+            {
+                type: 'function',
+                function: {
+                    name: 'create_task',
+                    description: 'Create a new task in the project with optional auto-assignment.',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            title: { type: 'string', description: 'Task title' },
+                            description: { type: 'string', description: 'Detailed task description' },
+                            priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Task priority' },
+                            assignee: { type: 'string', description: 'Name of the team member to assign this task to' }
+                        },
+                        required: ['title', 'priority']
+                    }
+                }
+            },
+            {
+                type: 'function',
+                function: {
+                    name: 'update_task',
+                    description: 'Update an existing task in the project (e.g., assign to someone, change status).',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            task_id: { type: 'string', description: 'ID of the task to update' },
+                            title: { type: 'string', description: 'Title of the task (if ID is unknown)' },
+                            status: { type: 'string', description: 'New status name (e.g., "In Progress", "Done")' },
+                            assignee: { type: 'string', description: 'Name of the member to assign' }
+                        }
+                    }
+                }
+            }
+        ];
 
+        const prompt = `You are a helpful project management AI assistant.
+        
 Project Context:
 ${projectContext}
 
 ${conversationHistory ? `Conversation History:\n${conversationHistory}\n` : ''}
 User: ${message}
 
-Provide a helpful, concise response based on the project context. Be specific and actionable.`;
+Provide a helpful, concise response based on the project context. Be specific and actionable.
+You can use 'create_task' for new work or 'update_task' to assign members or change statuses of existing tasks.
+If the user asks to "assign Sahil to the landing page task", look for "landing page" in the context and use 'update_task'.`;
 
         // Stream response
         let fullResponse = '';
-        for await (const chunk of groqService.generateContentStream(prompt, { temperature: 0.7 })) {
+        const streamConfig = {
+            temperature: 0.7,
+            tools: tools
+        };
+
+        for await (const chunk of groqService.generateContentStream(prompt, streamConfig)) {
+            // Note: In streaming mode, Groq currently doesn't always send tool_calls in chunks the same way OpenAI does 
+            // depending on the SDK version, but we'll yield the text and then check for tool calls if the stream ends 
+            // with a tool call intent. For now, we'll focus on text chunks.
             fullResponse += chunk;
             yield { chunk, session_id: session.id };
         }
@@ -251,7 +418,6 @@ Provide a helpful, concise response based on the project context. Be specific an
         await AIChatMessage.create({
             session_id: session.id,
             role: 'assistant',
-            content: fullResponse,
             content: fullResponse
         });
     }

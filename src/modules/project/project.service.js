@@ -131,7 +131,7 @@ class ProjectService {
             try {
                 if (sequelize.models.Task && sequelize.models.TaskStatus) {
                     const tasks = await sequelize.models.Task.findAll({
-                        where: { project_id: project.id },
+                        where: { project_id: project.id, archived_at: null },
                         include: [{
                             model: sequelize.models.TaskStatus,
                             as: 'status',
@@ -237,7 +237,7 @@ class ProjectService {
             // Get task statistics
             if (sequelize.models.Task) {
                 const tasks = await sequelize.models.Task.findAll({
-                    where: { project_id: projectId },
+                    where: { project_id: projectId, archived_at: null },
                     include: [{
                         model: TaskStatus,
                         as: 'status',

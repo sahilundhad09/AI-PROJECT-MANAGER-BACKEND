@@ -9,6 +9,7 @@ const {
     ProjectLabel,
     WorkspaceMember,
     User,
+    ActivityLog,
     sequelize
 } = require('../../database/models');
 const { Op } = require('sequelize');
@@ -99,6 +100,37 @@ class TaskService {
                         }, { transaction });
                     }
                 }
+
+                // Auto-progression: If task is in default status and assigned, move to first non-default status
+                const nextStatus = await TaskStatus.findOne({
+                    where: {
+                        project_id: projectId,
+                        is_default: false,
+                        is_completed: false
+                    },
+                    order: [['position', 'ASC']],
+                    transaction
+                });
+
+                if (nextStatus) {
+                    await task.update({
+                        status_id: nextStatus.id,
+                        completed_at: nextStatus.is_completed ? new Date() : null
+                    }, { transaction });
+
+                    await ActivityLog.create({
+                        workspace_id: project.workspace_id,
+                        project_id: project.id,
+                        actor_id: userId,
+                        action: 'task_status_changed',
+                        description: `Neural Orchestrator: Auto-moved "${task.title}" to ${nextStatus.name} due to assignment.`,
+                        meta: {
+                            task_id: task.id,
+                            from_status: defaultStatus.name,
+                            to_status: nextStatus.name
+                        }
+                    }, { transaction });
+                }
             }
 
             // Add labels if specified
@@ -138,7 +170,7 @@ class TaskService {
             search,
             archived = 'false',
             page = 1,
-            limit = 20
+            limit = 100  // Increased from 20 to 100 for better Kanban board support
         } = filters;
 
         const offset = (page - 1) * limit;
@@ -447,7 +479,17 @@ class TaskService {
             throw new Error('Insufficient permissions');
         }
 
-        // Update task
+        // Handle status update if provided through general update
+        if (data.status_id && data.status_id !== task.status_id) {
+            const newStatus = await TaskStatus.findByPk(data.status_id);
+            if (!newStatus || newStatus.project_id !== task.project_id) {
+                throw new Error('Invalid status for this project');
+            }
+            task.status_id = data.status_id;
+            task.completed_at = newStatus.is_completed ? new Date() : null;
+        }
+
+        // Update task fields
         await task.update({
             title: data.title !== undefined ? data.title : task.title,
             description: data.description !== undefined ? data.description : task.description,
@@ -455,7 +497,9 @@ class TaskService {
             due_date: data.due_date !== undefined ? data.due_date : task.due_date,
             start_date: data.start_date !== undefined ? data.start_date : task.start_date,
             estimated_hours: data.estimated_hours !== undefined ? data.estimated_hours : task.estimated_hours,
-            actual_hours: data.actual_hours !== undefined ? data.actual_hours : task.actual_hours
+            actual_hours: data.actual_hours !== undefined ? data.actual_hours : task.actual_hours,
+            status_id: task.status_id,
+            completed_at: task.completed_at
         });
 
         return await this.getTaskById(taskId, userId);
@@ -694,11 +738,8 @@ class TaskService {
             where: { project_id: task.project_id, workspace_member_id: workspaceMember.id }
         });
 
-        if (!projectMember || !['lead'].includes(projectMember.project_role)) {
-            // Check if user is workspace owner/admin
-            if (!['owner', 'admin'].includes(workspaceMember.role)) {
-                throw new Error('Only project leads or workspace admins can assign/unassign members');
-            }
+        if (!projectMember || projectMember.project_role === 'viewer') {
+            throw new Error('Insufficient permissions to assign members. Only project collaborators can manage assignments.');
         }
 
         // Verify all members belong to project
@@ -732,22 +773,24 @@ class TaskService {
             }
         }
 
-        // Auto-progression: If task is in "To Do", move to "In Progress"
-        const defaultStatus = await TaskStatus.findOne({
-            where: { project_id: task.project_id, is_default: true },
-            order: [['position', 'ASC']]
-        });
-
-        if (task.status_id === defaultStatus?.id && newlyAssignedMembers.length > 0) {
+        // Auto-progression: If task is in default status, move to first non-completed, non-default status
+        const currentStatus = await TaskStatus.findByPk(task.status_id);
+        if (currentStatus?.is_default && newlyAssignedMembers.length > 0) {
             const inProgressStatus = await TaskStatus.findOne({
                 where: {
                     project_id: task.project_id,
-                    name: { [Op.iLike]: '%progress%' }
-                }
+                    is_completed: false,
+                    is_default: false
+                },
+                order: [['position', 'ASC']]
             });
 
             if (inProgressStatus) {
-                await task.update({ status_id: inProgressStatus.id });
+                const oldStatusName = currentStatus.name;
+                await task.update({
+                    status_id: inProgressStatus.id,
+                    completed_at: inProgressStatus.is_completed ? new Date() : null
+                });
                 // Log activity for auto-transition
                 const { ActivityLog } = require('../../database/models'); // Ensure ActivityLog is available
                 await ActivityLog.create({
@@ -758,7 +801,7 @@ class TaskService {
                     description: `Neural Orchestrator: Auto-moved "${task.title}" to ${inProgressStatus.name} due to assignment.`,
                     meta: {
                         task_id: task.id,
-                        from_status: defaultStatus.name,
+                        from_status: oldStatusName,
                         to_status: inProgressStatus.name
                     }
                 });
@@ -817,7 +860,8 @@ class TaskService {
             }
         }
 
-        return await this.getAssignees(taskId);
+        // Return the full updated task with new status
+        return await this.getTaskById(taskId, userId);
     }
 
     /**

@@ -20,7 +20,7 @@ class GroqService {
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
-                const completion = await this.groq.chat.completions.create({
+                const payload = {
                     messages: [
                         {
                             role: 'system',
@@ -35,16 +35,26 @@ class GroqService {
                     temperature: config.temperature || 0.7,
                     max_tokens: config.maxOutputTokens || 2048,
                     top_p: config.topP || 0.95,
-                });
+                };
 
-                const text = completion.choices[0]?.message?.content || '';
+                if (config.tools) {
+                    payload.tools = config.tools;
+                    payload.tool_choice = config.tool_choice || 'auto';
+                }
 
-                if (!text) {
+                const completion = await this.groq.chat.completions.create(payload);
+
+                const message = completion.choices[0]?.message;
+                const text = message?.content || '';
+                const toolCalls = message?.tool_calls || null;
+
+                if (!text && !toolCalls) {
                     throw new Error('Empty response from AI');
                 }
 
                 return {
                     text: text,
+                    toolCalls: toolCalls,
                     tokensUsed: completion.usage?.total_tokens || this.estimateTokens(prompt + text)
                 };
             } catch (error) {
@@ -81,7 +91,7 @@ class GroqService {
         const systemInstruction = config.systemInstruction || 'You are a helpful project management AI assistant. Be concise and actionable.';
 
         try {
-            const stream = await this.groq.chat.completions.create({
+            const payload = {
                 messages: [
                     {
                         role: 'system',
@@ -97,7 +107,14 @@ class GroqService {
                 max_tokens: config.maxOutputTokens || 2048,
                 top_p: config.topP || 0.95,
                 stream: true,
-            });
+            };
+
+            if (config.tools) {
+                payload.tools = config.tools;
+                payload.tool_choice = config.tool_choice || 'auto';
+            }
+
+            const stream = await this.groq.chat.completions.create(payload);
 
             for await (const chunk of stream) {
                 const text = chunk.choices[0]?.delta?.content || '';
@@ -157,6 +174,7 @@ class GroqService {
                 blocked: tasks.filter(t => t.status === 'Blocked').length
             },
             recent_tasks: tasks.slice(0, 10).map(t => ({
+                id: t.id,
                 title: t.title,
                 status: t.status,
                 priority: t.priority,

@@ -114,11 +114,11 @@ const assignMembers = async (req, res, next) => {
         const { taskId } = req.params;
         const { project_member_ids } = req.body;
         const userId = req.user.id;
-        const assignees = await taskService.assignMembers(taskId, project_member_ids, userId);
+        const updatedTask = await taskService.assignMembers(taskId, project_member_ids, userId);
         res.status(201).json({
             success: true,
             message: 'Members assigned successfully',
-            data: assignees
+            data: updatedTask
         });
     } catch (error) {
         next(error);

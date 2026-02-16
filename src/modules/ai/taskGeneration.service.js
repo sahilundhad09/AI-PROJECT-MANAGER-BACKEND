@@ -1,4 +1,4 @@
-const { AITaskGeneration, Project, Task, WorkspaceMember, ProjectMember, TaskStatus } = require('../../database/models');
+const { AITaskGeneration, Project, Task, WorkspaceMember, ProjectMember, TaskStatus, User, TaskAssignee } = require('../../database/models');
 const groqService = require('../../shared/services/groq.service');
 
 class TaskGenerationService {
@@ -31,6 +31,24 @@ class TaskGenerationService {
             throw new Error('You are not a member of this project');
         }
 
+        // Fetch project members for AI context
+        const projectMembers = await ProjectMember.findAll({
+            where: { project_id: projectId },
+            include: [{
+                model: WorkspaceMember,
+                as: 'workspaceMember',
+                include: [{
+                    model: User,
+                    as: 'user',
+                    attributes: ['name']
+                }]
+            }]
+        });
+
+        const teamContext = projectMembers
+            .map(m => `${m.workspaceMember?.user?.name} (${m.project_role || 'Member'})`)
+            .join(', ');
+
         // Build AI prompt
         const aiPrompt = `You are a project management AI assistant. Generate ${count} actionable tasks for the following project.
 
@@ -43,6 +61,7 @@ Generate ${count} specific, actionable tasks. For each task, provide:
 - description: Detailed description of what needs to be done (2-3 sentences)
 - priority: One of: low, medium, high, urgent
 - estimated_hours: Realistic time estimate in hours (1-40)
+- suggested_assignee: Best fit from team: [${teamContext}]
 
 Return ONLY a JSON array with no additional text. Example format:
 [
@@ -50,7 +69,8 @@ Return ONLY a JSON array with no additional text. Example format:
     "title": "Setup project repository",
     "description": "Initialize Git repository, create README, and setup basic project structure with necessary folders.",
     "priority": "high",
-    "estimated_hours": 2
+    "estimated_hours": 2,
+    "suggested_assignee": "Name from team"
   }
 ]`;
 
@@ -147,19 +167,45 @@ Return ONLY a JSON array with no additional text. Example format:
             }
         }
 
+        const taskService = require('../task/task.service');
+
         // Create tasks
         const createdTasks = [];
         for (const index of taskIndices) {
             const taskData = generatedTasks[index];
+            let assignee_ids = [];
 
-            const task = await Task.create({
-                project_id: projectId,
+            // Handle AI Auto-Assignment resolution
+            if (taskData.suggested_assignee) {
+                const projectMembers = await ProjectMember.findAll({
+                    where: { project_id: projectId },
+                    include: [{
+                        model: WorkspaceMember,
+                        as: 'workspaceMember',
+                        include: [{
+                            model: User,
+                            as: 'user',
+                            attributes: ['name']
+                        }]
+                    }]
+                });
+
+                const member = projectMembers.find(m =>
+                    m.workspaceMember?.user?.name?.toLowerCase().includes(taskData.suggested_assignee.toLowerCase())
+                );
+
+                if (member) {
+                    assignee_ids.push(member.id);
+                }
+            }
+
+            const task = await taskService.createTask(projectId, userId, {
                 title: taskData.title,
                 description: taskData.description,
-                status_id: statusId,
+                status_id: statusId, // Pass the resolved status_id
                 priority: taskData.priority,
                 estimated_hours: taskData.estimated_hours,
-                created_by: userId
+                assignee_ids
             });
 
             createdTasks.push(task);

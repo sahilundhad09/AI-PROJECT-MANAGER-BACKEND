@@ -119,12 +119,13 @@ class AnalyticsService {
         const statusCounts = await Task.findAll({
             attributes: [
                 [sequelize.literal(`CASE 
-                WHEN "status"."is_completed" = true THEN 'Done'
-                        WHEN "status"."name" ILIKE '%progress%' THEN 'In Progress'
-                        ELSE 'To Do'
+                        WHEN "status"."is_completed" = true THEN 'Done'
+                        WHEN "status"."is_default" = true THEN 'To Do'
+                        ELSE 'In Progress'
                     END`), 'status_group'],
                 [sequelize.fn('COUNT', sequelize.col('Task.id')), 'count']
             ],
+            where: { archived_at: null },
             include: [{
                 model: require('../../database/models').TaskStatus,
                 as: 'status',
@@ -262,13 +263,18 @@ class AnalyticsService {
             };
         }
 
-        // 4. Get the tasks
+        // 4. Get the tasks with status information (excluding archived)
         const userTasks = await Task.findAll({
-            where: { id: taskIds }
+            where: { id: taskIds, archived_at: null },
+            include: [{
+                model: TaskStatus,
+                as: 'status',
+                attributes: ['is_completed']
+            }]
         });
 
         const tasksAssigned = userTasks.length;
-        const tasksCompleted = userTasks.filter(t => t.completed_at !== null).length;
+        const tasksCompleted = userTasks.filter(t => t.status?.is_completed).length;
         const completionRate = tasksAssigned > 0 ? Math.round((tasksCompleted / tasksAssigned) * 100) : 0;
 
         // Calculate on-time delivery
@@ -317,14 +323,20 @@ class AnalyticsService {
         // Pending Tasks (Assigned and not completed)
         const pendingTasks = await Task.findAll({
             where: {
-                id: taskIds,
-                completed_at: null
+                id: taskIds
             },
-            include: [{
-                model: Project,
-                as: 'project',
-                attributes: ['id', 'name']
-            }],
+            include: [
+                {
+                    model: TaskStatus,
+                    as: 'status',
+                    where: { is_completed: false }
+                },
+                {
+                    model: Project,
+                    as: 'project',
+                    attributes: ['id', 'name']
+                }
+            ],
             limit: 10,
             order: [['created_at', 'DESC']]
         });
@@ -346,7 +358,7 @@ class AnalyticsService {
      */
     async getProjectTaskStats(projectId) {
         const tasks = await Task.findAll({
-            where: { project_id: projectId },
+            where: { project_id: projectId, archived_at: null },
             include: [{
                 model: require('../../database/models').TaskStatus,
                 as: 'status',
@@ -372,10 +384,10 @@ class AnalyticsService {
             urgent: tasks.filter(t => t.priority === 'urgent').length
         };
 
-        // Count overdue tasks
+        // Count overdue tasks (not done, has due date, due date in past)
         const now = new Date();
         const overdue = tasks.filter(t =>
-            !t.completed_at && t.due_date && new Date(t.due_date) < now
+            !t.status?.is_completed && t.due_date && new Date(t.due_date) < now
         ).length;
 
         const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -395,10 +407,15 @@ class AnalyticsService {
      */
     async getAssigneeWorkload(projectId) {
         try {
-            // Get all tasks for this project
+            // Get all tasks for this project with status
             const tasks = await Task.findAll({
                 where: { project_id: projectId },
-                attributes: ['id', 'completed_at']
+                attributes: ['id', 'completed_at'],
+                include: [{
+                    model: TaskStatus,
+                    as: 'status',
+                    attributes: ['is_completed']
+                }]
             });
 
             if (tasks.length === 0) {
@@ -453,7 +470,7 @@ class AnalyticsService {
                     workloadMap[user.id].taskCount++;
 
                     const task = tasks.find(t => t.id === assignee.task_id);
-                    if (task && task.completed_at) {
+                    if (task && task.status?.is_completed) {
                         workloadMap[user.id].completedCount++;
                     }
                 }
@@ -473,10 +490,15 @@ class AnalyticsService {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Get all tasks for the project
+        // Get all tasks for the project (excluding archived)
         const tasks = await Task.findAll({
-            where: { project_id: projectId },
-            attributes: ['id', 'created_at', 'completed_at']
+            where: { project_id: projectId, archived_at: null },
+            attributes: ['id', 'created_at', 'completed_at'],
+            include: [{
+                model: TaskStatus,
+                as: 'status',
+                attributes: ['is_completed']
+            }]
         });
 
         // Generate daily data
@@ -496,13 +518,19 @@ class AnalyticsService {
                 return completedDate >= date && completedDate < nextDate;
             }).length;
 
-            // Count remaining tasks (created before or on this day, not completed)
+            // Count remaining tasks (created before or on this day, not marked as done by then)
             const remaining = tasks.filter(t => {
                 const created = new Date(t.created_at);
                 if (created > nextDate) return false;
-                if (!t.completed_at) return true;
-                const completed = new Date(t.completed_at);
-                return completed >= nextDate;
+
+                // If it's completed, it's ONLY remaining if it was completed AFTER this day
+                if (t.status?.is_completed && t.completed_at) {
+                    const completed = new Date(t.completed_at);
+                    return completed >= nextDate;
+                }
+
+                // If not completed yet (or missing completed_at but has is_completed=false), it's remaining
+                return true;
             }).length;
 
             burndown.push({

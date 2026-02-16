@@ -4,7 +4,7 @@ const { z } = require('zod');
 const uuidSchema = z.string().uuid('Invalid UUID format');
 const paginationSchema = z.object({
     page: z.coerce.number().int().min(1).optional().default(1),
-    limit: z.coerce.number().int().min(1).max(100).optional().default(20)
+    limit: z.coerce.number().int().min(1).max(500).optional().default(100)
 });
 
 // Task CRUD Validators
