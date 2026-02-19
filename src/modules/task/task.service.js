@@ -639,6 +639,47 @@ class TaskService {
                 new_status: newStatus.name
             });
 
+            // Send completion email if task moved to completed status
+            if (newStatus.is_completed && !oldStatus.is_completed) {
+                // Notify the task creator
+                if (task.created_by && task.created_by !== userId) {
+                    const creator = await User.findByPk(task.created_by);
+                    const completedBy = await User.findByPk(userId);
+                    if (creator?.email) {
+                        emailService.sendEmail(
+                            creator.email,
+                            `✅ Task Completed: ${task.title}`,
+                            `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                                <div style="background: #10b981; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+                                    <h2>✅ Task Completed!</h2>
+                                </div>
+                                <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+                                    <p><strong>${completedBy?.name || 'A team member'}</strong> completed a task:</p>
+                                    <div style="background: #ecfdf5; padding: 20px; border-left: 4px solid #10b981; margin: 20px 0;">
+                                        <h3 style="color: #059669;">${task.title}</h3>
+                                        <p><strong>Project:</strong> ${project.name}</p>
+                                    </div>
+                                    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/projects/${project.id}"
+                                       style="display: inline-block; padding: 12px 30px; background: #10b981; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0;">
+                                        View Project
+                                    </a>
+                                </div>
+                            </div>
+                            `
+                        ).catch(err => console.error('Failed to send completion email:', err.message));
+
+                        notificationService.createNotification(
+                            creator.id,
+                            'task_completed',
+                            'Task Completed',
+                            `${completedBy?.name || 'A team member'} completed "${task.title}"`,
+                            { taskId: task.id, projectId: project.id, completedBy: completedBy?.name }
+                        ).catch(err => console.error('Failed to create completion notification:', err.message));
+                    }
+                }
+            }
+
             return await this.getTaskById(taskId, userId);
         } catch (error) {
             if (!transaction.finished) {

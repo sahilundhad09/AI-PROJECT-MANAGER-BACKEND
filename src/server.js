@@ -1,6 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { initializeSocket } = require('./shared/services/socket.service');
+const { initializeCronJobs } = require('./shared/services/cron.service');
 
 const PORT = process.env.PORT || 5000;
 
@@ -12,6 +13,9 @@ const server = app.listen(PORT, () => {
 
 // Initialize Socket.io
 initializeSocket(server);
+
+// Initialize scheduled jobs (deadline reminders, overdue alerts)
+initializeCronJobs();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
