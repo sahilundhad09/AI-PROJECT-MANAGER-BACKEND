@@ -1,4 +1,5 @@
 const taskService = require('./task.service');
+const { emitTaskEvent } = require('../../shared/services/socket.service');
 
 // Task CRUD Controllers
 
@@ -7,6 +8,10 @@ const createTask = async (req, res, next) => {
         const { projectId } = req.params;
         const userId = req.user.id;
         const task = await taskService.createTask(projectId, userId, req.body);
+
+        // Emit real-time event
+        emitTaskEvent(projectId, 'task:created', task);
+
         res.status(201).json({
             success: true,
             message: 'Task created successfully',
@@ -51,6 +56,10 @@ const updateTask = async (req, res, next) => {
         const { taskId } = req.params;
         const userId = req.user.id;
         const task = await taskService.updateTask(taskId, userId, req.body);
+
+        // Emit real-time event
+        emitTaskEvent(task.project_id, 'task:updated', task);
+
         res.json({
             success: true,
             message: 'Task updated successfully',
@@ -67,6 +76,10 @@ const moveTask = async (req, res, next) => {
         const { status_id, position } = req.body;
         const userId = req.user.id;
         const task = await taskService.moveTask(taskId, status_id, position, userId);
+
+        // Emit real-time event
+        emitTaskEvent(task.project_id, 'task:moved', task);
+
         res.json({
             success: true,
             message: 'Task moved successfully',
@@ -97,7 +110,16 @@ const deleteTask = async (req, res, next) => {
     try {
         const { taskId } = req.params;
         const userId = req.user.id;
+
+        // Get project_id before deleting
+        const task = await taskService.getTaskById(taskId, userId);
+        const projectId = task.project_id;
+
         await taskService.deleteTask(taskId, userId);
+
+        // Emit real-time event
+        emitTaskEvent(projectId, 'task:deleted', { id: taskId, project_id: projectId });
+
         res.json({
             success: true,
             message: 'Task deleted successfully'
