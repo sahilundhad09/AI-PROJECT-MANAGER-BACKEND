@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User, RefreshToken } = require('../../database/models');
 const { jwtSecret, jwtRefreshSecret, jwtExpiresIn, jwtRefreshExpiresIn } = require('../../config/jwt');
-const { hashPassword, comparePassword, generateToken } = require('../../shared/utils/helpers');
+const { hashPassword, comparePassword } = require('../../shared/utils/helpers');
 const emailService = require('../../shared/services/email.service');
 
 class AuthService {
@@ -124,10 +124,10 @@ class AuthService {
                 throw error;
             }
 
-            // Generate new access token
-            const accessToken = this.generateAccessToken(decoded.userId);
+            // Generate new tokens (rotation)
+            const tokens = await this.generateTokens(decoded.userId);
 
-            return { accessToken };
+            return tokens;
         } catch (error) {
             if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
                 const err = new Error('Invalid refresh token');
@@ -199,7 +199,7 @@ class AuthService {
     }
 
     /**
-     * Change password
+     * Change password (authenticated)
      */
     async changePassword(userId, currentPassword, newPassword) {
         const user = await User.findByPk(userId);
@@ -231,6 +231,97 @@ class AuthService {
         );
 
         return { message: 'Password changed successfully' };
+    }
+
+    /**
+     * Forgot password - generate reset OTP and send email
+     */
+    async forgotPassword(email) {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            // Return success even if user not found for security
+            return { message: 'If an account exists, a reset protocol code has been dispatched.' };
+        }
+
+        // Generate 6-digit OTP
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+        await user.update({
+            reset_otp_code: otpCode,
+            reset_otp_expires_at: otpExpiresAt
+        });
+
+        // Send reset OTP email
+        await emailService.sendResetOTP(user.email, user.name, otpCode);
+
+        return { message: 'If an account exists, a reset protocol code has been dispatched.' };
+    }
+
+    /**
+     * Verify reset OTP
+     */
+    async verifyResetOTP(email, otpCode) {
+        const { Op } = require('sequelize');
+        const user = await User.findOne({
+            where: {
+                email,
+                reset_otp_code: otpCode,
+                reset_otp_expires_at: {
+                    [Op.gt]: new Date()
+                }
+            }
+        });
+
+        if (!user) {
+            const error = new Error('Invalid or expired reset protocol code');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        return { success: true, message: 'Reset protocol code verified. Proceed with credential update.' };
+    }
+
+    /**
+     * Reset password using OTP
+     */
+    async resetPassword(email, otp, newPassword) {
+        const { Op } = require('sequelize');
+        const user = await User.findOne({
+            where: {
+                email,
+                reset_otp_code: otp,
+                reset_otp_expires_at: {
+                    [Op.gt]: new Date()
+                }
+            }
+        });
+
+        if (!user) {
+            const error = new Error('Reset protocol failed: Invalid or expired code');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        // Hash new password
+        const password_hash = await hashPassword(newPassword);
+
+        // Update user
+        await user.update({
+            password_hash,
+            reset_otp_code: null,
+            reset_otp_expires_at: null,
+            reset_password_token: null,
+            reset_password_expires: null
+        });
+
+        // Revoke all refresh tokens
+        await RefreshToken.update(
+            { revoked_at: new Date() },
+            { where: { user_id: user.id, revoked_at: null } }
+        );
+
+        return { message: 'Password reset successfully. Access protocol restored.' };
     }
 
     /**

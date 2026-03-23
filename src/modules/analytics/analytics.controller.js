@@ -77,6 +77,64 @@ class AnalyticsController {
             next(error);
         }
     }
+
+    /**
+     * Get individual growth metrics
+     * GET /api/v1/analytics/growth/me
+     */
+    async getIndividualGrowth(req, res, next) {
+        try {
+            const growth = await analyticsService.getIndividualGrowth(
+                req.user.id,
+                req.query.workspaceId
+            );
+
+            res.json({
+                success: true,
+                data: growth
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Get workspace-wide growth
+     * GET /api/v1/workspaces/:workspaceId/analytics/growth
+     */
+    async getWorkspaceGrowth(req, res, next) {
+        try {
+            const growth = await analyticsService.getWorkspaceGrowth(
+                req.params.workspaceId
+            );
+
+            res.json({
+                success: true,
+                data: growth
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Get project-specific growth
+     * GET /api/v1/projects/:projectId/analytics/growth
+     */
+    async getProjectGrowth(req, res, next) {
+        try {
+            const growth = await analyticsService.getProjectGrowth(
+                req.params.projectId
+            );
+
+            res.json({
+                success: true,
+                data: growth
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new AnalyticsController();

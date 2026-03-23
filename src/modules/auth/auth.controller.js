@@ -53,7 +53,7 @@ class AuthController {
 
     /**
      * Refresh access token
-     * POST /api/v1/auth/refresh
+     * POST /api/v1/auth/refresh-token
      */
     async refreshToken(req, res, next) {
         try {
@@ -130,6 +130,60 @@ class AuthController {
         try {
             const { currentPassword, newPassword } = req.body;
             const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Forgot password
+     * POST /api/v1/auth/forgot-password
+     */
+    async forgotPassword(req, res, next) {
+        try {
+            const { email } = req.body;
+            const result = await authService.forgotPassword(email);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Verify reset OTP
+     * POST /api/v1/auth/verify-reset-otp
+     */
+    async verifyResetOTP(req, res, next) {
+        try {
+            const { email, otp } = req.body;
+            const result = await authService.verifyResetOTP(email, otp);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Reset password
+     * POST /api/v1/auth/reset-password
+     */
+    async resetPassword(req, res, next) {
+        try {
+            const { email, otp, newPassword } = req.body;
+            const result = await authService.resetPassword(email, otp, newPassword);
 
             res.json({
                 success: true,

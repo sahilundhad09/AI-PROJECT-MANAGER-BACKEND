@@ -128,36 +128,54 @@ class EmailService {
     /**
      * Password reset email
      */
+    /**
+     * Password reset email
+     */
     async sendPasswordReset(to, userName, resetToken) {
         const resetLink = `${this.frontendUrl}/reset-password/${resetToken}`;
-        const subject = 'Reset Your Password';
+        const subject = 'Action Required: Password Reset Protocol';
         const html = `
             <!DOCTYPE html>
             <html>
             <head>
                 <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: #667eea; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                    .button { display: inline-block; padding: 12px 30px; background: #e74c3c; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-                    .warning { background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }
+                    body { font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #E2E8F0; background-color: #030408; margin: 0; padding: 0; }
+                    .container { max-width: 600px; margin: 40px auto; padding: 40px; background-color: #0A0D18; border: 1px solid #1E293B; border-radius: 24px; }
+                    .header { text-align: center; margin-bottom: 40px; }
+                    .logo { font-size: 24px; font-weight: 900; letter-spacing: -0.05em; color: #22D3EE; text-transform: uppercase; font-style: italic; }
+                    .content { text-align: center; }
+                    .button-container { margin: 40px 0; }
+                    .button { display: inline-block; padding: 16px 40px; background-color: #22D3EE; color: #030408; text-decoration: none; border-radius: 12px; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s ease; box-shadow: 0 10px 20px rgba(34, 211, 238, 0.2); }
+                    .warning-box { background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 16px; padding: 20px; margin: 30px 0; text-align: left; }
+                    .warning-title { color: #F43F5E; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; display: block; }
+                    .warning-text { color: #94A3B8; font-size: 13px; margin: 0; }
+                    .footer { text-align: center; margin-top: 40px; color: #64748B; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+                    .link-alt { color: #22D3EE; font-size: 12px; text-decoration: none; opacity: 0.7; word-break: break-all; }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <div class="header">
-                        <h2>🔑 Password Reset Request</h2>
+                        <div class="logo">Cronos AI Protocol</div>
                     </div>
                     <div class="content">
-                        <p>Hi ${userName},</p>
-                        <p>We received a request to reset your password. Click the button below to create a new password:</p>
-                        <a href="${resetLink}" class="button">Reset Password</a>
-                        <div class="warning">
-                            <p><strong>⚠️ Security Notice:</strong></p>
-                            <p>This link will expire in 1 hour. If you didn't request this, please ignore this email.</p>
+                        <h2 style="font-weight: 900; color: #FFFFFF; text-transform: uppercase; font-style: italic; margin-bottom: 8px; letter-spacing: -0.02em;">Access Reset Protocol</h2>
+                        <p style="color: #94A3B8; font-size: 14px; margin-bottom: 30px;">Hi ${userName}, a password reset has been initiated for your personnel account. Click below to authorize the update.</p>
+                        
+                        <div class="button-container">
+                            <a href="${resetLink}" class="button">Authorize Reset</a>
                         </div>
-                        <p>Or copy and paste this link: <br>${resetLink}</p>
+                        
+                        <div class="warning-box">
+                            <span class="warning-title">⚠️ Security Notice</span>
+                            <p class="warning-text">This authentication link will terminate in 60 minutes. If you did not initiate this protocol, your account security may be compromised.</p>
+                        </div>
+                        
+                        <p style="color: #475569; font-size: 11px; margin-top: 40px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">Manual Override Link:</p>
+                        <a href="${resetLink}" class="link-alt">${resetLink}</a>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 CRONOS AI SYSTEMS • SECURE LAYER</p>
                     </div>
                 </div>
             </body>
@@ -371,6 +389,56 @@ class EmailService {
             console.error('❌ Email service error:', error.message);
             return false;
         }
+    }
+    /**
+     * Password reset OTP email
+     */
+    async sendResetOTP(to, userName, otpCode) {
+        const subject = 'Action Required: Reset Protocol Authentication Code';
+        const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #E2E8F0; background-color: #030408; margin: 0; padding: 0; }
+                    .container { max-width: 600px; margin: 40px auto; padding: 40px; background-color: #0A0D18; border: 1px solid #1E293B; border-radius: 24px; }
+                    .header { text-align: center; margin-bottom: 40px; }
+                    .logo { font-size: 24px; font-weight: 900; letter-spacing: -0.05em; color: #22D3EE; text-transform: uppercase; font-style: italic; }
+                    .content { text-align: center; }
+                    .otp-container { margin: 40px 0; background: rgba(34, 211, 238, 0.05); border: 2px dashed rgba(34, 211, 238, 0.3); border-radius: 20px; padding: 30px; }
+                    .otp-code { font-size: 48px; font-weight: 900; color: #22D3EE; letter-spacing: 0.2em; margin: 0; font-family: 'Courier New', monospace; }
+                    .warning-box { background: rgba(244, 63, 94, 0.05); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 16px; padding: 20px; margin: 30px 0; text-align: left; }
+                    .warning-title { color: #F43F5E; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; display: block; }
+                    .warning-text { color: #94A3B8; font-size: 13px; margin: 0; }
+                    .footer { text-align: center; margin-top: 40px; color: #64748B; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="logo">Cronos AI Protocol</div>
+                    </div>
+                    <div class="content">
+                        <h2 style="font-weight: 900; color: #FFFFFF; text-transform: uppercase; font-style: italic; margin-bottom: 8px; letter-spacing: -0.02em;">Authentication Protocol</h2>
+                        <p style="color: #94A3B8; font-size: 14px; margin-bottom: 30px;">Hi ${userName}, use the highly-secure temporary code below to authorize your password recovery protocol.</p>
+                        
+                        <div class="otp-container">
+                            <h1 class="otp-code">${otpCode}</h1>
+                        </div>
+                        
+                        <div class="warning-box">
+                            <span class="warning-title">⚠️ Security Notice</span>
+                            <p class="warning-text">This authentication code will terminate in 15 minutes. Restricted access applies. If you did not initiate this protocol, contact your system administrator immediately.</p>
+                        </div>
+                    </div>
+                    <div class="footer">
+                        <p>© 2026 CRONOS AI SYSTEMS • SECURE LAYER</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+        return this.sendEmail(to, subject, html);
     }
 }
 
