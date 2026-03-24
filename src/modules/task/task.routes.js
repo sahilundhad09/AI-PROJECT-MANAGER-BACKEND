@@ -4,6 +4,7 @@ const taskController = require('./task.controller');
 const authenticate = require('../../shared/middleware/auth.middleware');
 const { validate } = require('../../shared/middleware/validator.middleware');
 const taskValidator = require('./task.validator');
+const upload = require('../../shared/utils/fileUpload');
 
 // Task CRUD Routes
 
@@ -175,6 +176,30 @@ router.get(
     authenticate,
     validate(taskValidator.getSubtasksSchema),
     taskController.getSubtasks
+);
+
+// Task Attachment Routes
+
+// Upload attachment
+router.post(
+    '/tasks/:taskId/attachments',
+    authenticate,
+    upload.single('file'),
+    taskController.uploadAttachment
+);
+
+// Get task attachments
+router.get(
+    '/tasks/:taskId/attachments',
+    authenticate,
+    taskController.getTaskAttachments
+);
+
+// Delete attachment
+router.delete(
+    '/tasks/:taskId/attachments/:attachmentId',
+    authenticate,
+    taskController.deleteAttachment
 );
 
 module.exports = router;

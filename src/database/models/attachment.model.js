@@ -42,6 +42,8 @@ module.exports = (sequelize) => {
         }
     }, {
         tableName: 'attachments',
+        timestamps: true,
+        underscored: true,
         updatedAt: false,
         indexes: [
             { fields: ['task_id'] },

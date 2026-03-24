@@ -38,6 +38,7 @@ class ProjectService {
                 name: data.name,
                 description: data.description,
                 color: data.color,
+                image_url: data.image_url,
                 start_date: data.start_date,
                 end_date: data.end_date,
                 settings: data.settings || {}

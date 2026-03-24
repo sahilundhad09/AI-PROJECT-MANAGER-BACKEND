@@ -7,7 +7,6 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'Cronos Ai',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv'],
         resource_type: 'auto', // Important for non-image files
         public_id: (req, file) => {
             const name = file.originalname.split('.')[0];
