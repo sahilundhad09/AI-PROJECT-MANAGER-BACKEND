@@ -170,7 +170,12 @@ class AnalyticsService {
             include: [{
                 model: Task,
                 as: 'tasks',
-                attributes: ['status', 'priority']
+                attributes: ['priority'],
+                include: [{
+                    model: TaskStatus,
+                    as: 'status',
+                    attributes: ['name', 'is_completed']
+                }]
             }]
         });
 
@@ -182,7 +187,15 @@ class AnalyticsService {
         Active Projects: ${stats.activeProjects}
         
         Project Breakdown:
-        ${projects.map(p => `- ${p.name}: ${p.tasks.length} tasks`).join('\n')}
+        ${projects.map(p => {
+            const statusCounts = {};
+            p.tasks.forEach(t => {
+                const s = t.status?.name || 'Unknown';
+                statusCounts[s] = (statusCounts[s] || 0) + 1;
+            });
+            const statusStr = Object.entries(statusCounts).map(([s, c]) => `${c} ${s}`).join(', ');
+            return `- ${p.name}: ${p.tasks.length} tasks (${statusStr})`;
+        }).join('\n')}
         
         Provide:
         1. A high-level executive summary (2 sentences).
