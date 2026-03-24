@@ -199,6 +199,28 @@ class AuthService {
     }
 
     /**
+     * Update user avatar
+     */
+    async updateAvatar(userId, avatarUrl) {
+        const user = await User.findByPk(userId);
+
+        if (!user) {
+            const error = new Error('User not found');
+            error.statusCode = 404;
+            throw error;
+        }
+
+        await user.update({ avatar_url: avatarUrl });
+
+        return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar_url: user.avatar_url
+        };
+    }
+
+    /**
      * Change password (authenticated)
      */
     async changePassword(userId, currentPassword, newPassword) {

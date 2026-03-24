@@ -4,6 +4,7 @@ const authController = require('./auth.controller');
 const authValidator = require('./auth.validator');
 const { validate } = require('../../shared/middleware/validator.middleware');
 const authenticate = require('../../shared/middleware/auth.middleware');
+const upload = require('../../shared/utils/fileUpload');
 
 // Public routes
 router.post('/register', validate(authValidator.registerSchema), authController.register);
@@ -20,5 +21,8 @@ router.post('/reset-password', validate(authValidator.resetPasswordSchema), auth
 router.get('/profile', authenticate, authController.getProfile);
 router.put('/profile', authenticate, validate(authValidator.updateProfileSchema), authController.updateProfile);
 router.post('/change-password', authenticate, validate(authValidator.changePasswordSchema), authController.changePassword);
+
+// Image Upload
+router.post('/profile/avatar', authenticate, upload.single('avatar'), authController.updateAvatar);
 
 module.exports = router;

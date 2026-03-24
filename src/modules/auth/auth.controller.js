@@ -193,6 +193,31 @@ class AuthController {
             next(error);
         }
     }
+
+    /**
+     * Update user avatar
+     * POST /api/v1/auth/profile/avatar
+     */
+    async updateAvatar(req, res, next) {
+        try {
+            if (!req.file) {
+                const error = new Error('No avatar file provided');
+                error.statusCode = 400;
+                throw error;
+            }
+
+            const avatarUrl = req.file.path; // Cloudinary URL returned by multer-storage-cloudinary
+            const user = await authService.updateAvatar(req.user.id, avatarUrl);
+
+            res.json({
+                success: true,
+                message: 'Avatar updated successfully',
+                data: user
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new AuthController();

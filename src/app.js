@@ -31,7 +31,8 @@ app.use(helmet());
 const allowedOrigins = [
     ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
     'http://localhost:3000',
-    'http://localhost:3001'
+    'http://localhost:3001',
+    'http://192.168.1.18:3001'
 ];
 
 app.use(cors({

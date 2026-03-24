@@ -40,8 +40,8 @@ const downloadAttachment = async (req, res, next) => {
         const userId = req.user.id;
         const attachment = await attachmentService.getAttachmentForDownload(attachmentId, userId);
 
-        // Send file
-        res.download(attachment.file_url, attachment.file_name);
+        // For Cloudinary URLs, we can just redirect or send the URL
+        res.redirect(attachment.file_url);
     } catch (error) {
         next(error);
     }

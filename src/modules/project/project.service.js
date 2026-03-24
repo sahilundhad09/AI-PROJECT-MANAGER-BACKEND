@@ -157,6 +157,7 @@ class ProjectService {
                 name: projectData.name,
                 description: projectData.description,
                 color: projectData.color,
+                image_url: projectData.image_url,
                 start_date: projectData.start_date,
                 end_date: projectData.end_date,
                 archived_at: projectData.archived_at,
@@ -285,10 +286,29 @@ class ProjectService {
             name: data.name !== undefined ? data.name : project.name,
             description: data.description !== undefined ? data.description : project.description,
             color: data.color !== undefined ? data.color : project.color,
+            image_url: data.image_url !== undefined ? data.image_url : project.image_url,
             start_date: data.start_date !== undefined ? data.start_date : project.start_date,
             end_date: data.end_date !== undefined ? data.end_date : project.end_date,
             settings: data.settings !== undefined ? data.settings : project.settings
         });
+
+        return await this.getProjectById(projectId, userId);
+    }
+
+    /**
+     * Update project image
+     */
+    async updateProjectImage(projectId, userId, imageUrl) {
+        const project = await Project.findByPk(projectId);
+
+        if (!project) {
+            throw new Error('Project not found');
+        }
+
+        // Check permissions
+        await this.checkProjectPermission(projectId, userId, ['lead']);
+
+        await project.update({ image_url: imageUrl });
 
         return await this.getProjectById(projectId, userId);
     }

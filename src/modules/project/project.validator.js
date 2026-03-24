@@ -57,6 +57,7 @@ const updateProjectSchema = z.object({
         name: z.string().min(3).max(100).optional(),
         description: z.string().max(1000).optional().nullable(),
         color: hexColorSchema.optional().nullable(),
+        image_url: z.string().url().optional().nullable(),
         start_date: z.string().datetime().optional().nullable(),
         end_date: z.string().datetime().optional().nullable(),
         settings: z.record(z.any()).optional()
