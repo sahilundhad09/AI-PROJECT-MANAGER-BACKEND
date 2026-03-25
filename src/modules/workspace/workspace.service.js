@@ -156,6 +156,13 @@ class WorkspaceService {
     }
 
     /**
+     * Update workspace logo URL
+     */
+    async updateWorkspaceLogo(workspaceId, userId, logoUrl) {
+        return this.updateWorkspace(workspaceId, userId, { logo_url: logoUrl });
+    }
+
+    /**
      * Delete workspace (soft delete)
      */
     async deleteWorkspace(workspaceId, userId) {
