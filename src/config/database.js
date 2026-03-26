@@ -1,5 +1,10 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const { neonConfig } = require('@neondatabase/serverless');
+const ws = require('ws');
+
+// Set WebSocket constructor for Neon Serverless driver
+neonConfig.webSocketConstructor = ws;
 
 module.exports = {
     development: {
@@ -9,6 +14,7 @@ module.exports = {
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT) || 5432,
         dialect: 'postgres',
+        dialectModule: require('@neondatabase/serverless'),
         logging: false,
         pool: {
             max: 10,
@@ -36,6 +42,7 @@ module.exports = {
         host: process.env.DB_HOST,
         port: process.env.DB_PORT || 5432,
         dialect: 'postgres',
+        dialectModule: require('@neondatabase/serverless'),
         dialectOptions: {
             ssl: {
                 require: true,

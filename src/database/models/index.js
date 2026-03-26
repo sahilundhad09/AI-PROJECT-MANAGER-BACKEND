@@ -12,6 +12,7 @@ const sequelize = new Sequelize(
         host: dbConfig.host,
         port: dbConfig.port,
         dialect: dbConfig.dialect,
+        dialectModule: dbConfig.dialectModule,
         logging: dbConfig.logging,
         pool: dbConfig.pool,
         define: dbConfig.define,
