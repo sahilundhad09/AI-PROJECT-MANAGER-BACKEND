@@ -3,12 +3,21 @@ const redis = require('redis');
 const redisClient = redis.createClient({
     socket: {
         host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379
+        port: process.env.REDIS_PORT || 6379,
+        reconnectStrategy: (retries) => {
+            if (retries > 5 && process.env.NODE_ENV !== 'production') {
+                return false; // Stop reconnecting after 5 attempts in development
+            }
+            return Math.min(retries * 500, 5000); // Backoff strategy
+        }
     }
 });
 
+// Only log critical errors in production to avoid spamming the console in development
 redisClient.on('error', (err) => {
-    console.error('Redis Client Error:', err);
+    if (process.env.NODE_ENV === 'production' || err.code !== 'ECONNREFUSED') {
+        console.error('Redis Client Error:', err.message);
+    }
 });
 
 redisClient.on('connect', () => {

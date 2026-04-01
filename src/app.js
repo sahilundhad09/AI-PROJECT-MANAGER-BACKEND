@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -32,13 +32,21 @@ const allowedOrigins = [
     ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
     'http://localhost:3000',
     'http://localhost:3001',
-    'http://192.168.1.18:3001'
+    'http://localhost:5173',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:5173'
 ];
+
+if (process.env.NODE_ENV === 'development') {
+    allowedOrigins.push('*');
+}
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+        // In development, allow all origins
+        if (process.env.NODE_ENV === 'development' || !origin) {
+            return callback(null, true);
+        }
 
         const isAllowed = allowedOrigins.includes(origin) || allowedOrigins.includes('*');
 
