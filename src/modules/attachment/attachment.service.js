@@ -166,14 +166,6 @@ class AttachmentService {
             throw new Error('You can only delete your own attachments');
         }
 
-        // Delete file from filesystem
-        try {
-            await fs.unlink(attachment.file_url);
-        } catch (error) {
-            console.error('Error deleting file:', error);
-            // Continue even if file deletion fails
-        }
-
         // Delete database record
         await attachment.destroy();
     }

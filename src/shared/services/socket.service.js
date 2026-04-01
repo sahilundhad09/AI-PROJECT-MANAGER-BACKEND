@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../../config/jwt');
 
 let io = null;
 
@@ -9,9 +10,11 @@ let io = null;
 function initializeSocket(httpServer) {
     io = new Server(httpServer, {
         cors: {
-            origin: process.env.FRONTEND_URL
-                ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
-                : ['http://localhost:3000'],
+            origin: process.env.NODE_ENV === 'development' 
+                ? true // true allows all origins in socket.io v4
+                : (process.env.FRONTEND_URL 
+                    ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) 
+                    : ['http://localhost:3000']),
             credentials: true
         },
         pingTimeout: 60000,
@@ -22,15 +25,20 @@ function initializeSocket(httpServer) {
     io.use((socket, next) => {
         const token = socket.handshake.auth?.token;
         if (!token) {
+            console.warn('🔌 Socket authentication failed: No token provided');
             return next(new Error('Authentication required'));
         }
 
         try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            const decoded = jwt.verify(token, jwtSecret);
             socket.userId = decoded.id || decoded.userId;
             socket.user = decoded;
             next();
         } catch (error) {
+            console.error('🔌 Socket authentication error:', error.message);
+            if (error.name === 'TokenExpiredError') {
+                return next(new Error('Token expired'));
+            }
             return next(new Error('Invalid token'));
         }
     });

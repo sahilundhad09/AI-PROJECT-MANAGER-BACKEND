@@ -49,6 +49,15 @@ router.delete(
     workspaceController.deleteWorkspace
 );
 
+// Logo Management
+const upload = require('../../shared/utils/fileUpload');
+router.post(
+    '/:workspaceId/logo',
+    requireWorkspaceRole(['owner', 'admin']),
+    upload.single('logo'),
+    workspaceController.uploadWorkspaceLogo
+);
+
 // Member Management
 router.get(
     '/:workspaceId/members',

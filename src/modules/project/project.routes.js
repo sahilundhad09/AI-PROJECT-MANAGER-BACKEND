@@ -75,6 +75,14 @@ router.delete(
     projectController.deleteProject
 );
 
+// Upload project image
+const upload = require('../../shared/utils/fileUpload');
+router.post(
+    '/projects/:projectId/image',
+    upload.single('image'),
+    projectController.updateProjectImage
+);
+
 // ========== Project Member Routes ==========
 
 // Add member to project

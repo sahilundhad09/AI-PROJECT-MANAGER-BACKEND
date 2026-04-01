@@ -47,4 +47,37 @@ router.get(
     analyticsController.analyzeWorkspace
 );
 
+/**
+ * @route   GET /api/v1/analytics/growth/me
+ * @desc    Get personal growth metrics
+ * @access  Private
+ */
+router.get(
+    '/analytics/growth/me',
+    authenticate,
+    analyticsController.getIndividualGrowth
+);
+
+/**
+ * @route   GET /api/v1/workspaces/:workspaceId/analytics/growth
+ * @desc    Get workspace-wide member growth
+ * @access  Private (Owner/Admin)
+ */
+router.get(
+    '/workspaces/:workspaceId/analytics/growth',
+    authenticate,
+    analyticsController.getWorkspaceGrowth
+);
+
+/**
+ * @route   GET /api/v1/projects/:projectId/analytics/growth
+ * @desc    Get project-specific member growth
+ * @access  Private (Project Lead)
+ */
+router.get(
+    '/projects/:projectId/analytics/growth',
+    authenticate,
+    analyticsController.getProjectGrowth
+);
+
 module.exports = router;

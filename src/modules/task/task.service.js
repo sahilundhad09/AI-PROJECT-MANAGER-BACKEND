@@ -9,10 +9,12 @@ const {
     ProjectLabel,
     WorkspaceMember,
     User,
-    ActivityLog,
+    Attachment,
+    Comment,
     sequelize
 } = require('../../database/models');
 const { Op } = require('sequelize');
+const cloudinary = require('../../config/cloudinary');
 const emailService = require('../../shared/services/email.service');
 const notificationService = require('../notification/notification.service');
 
@@ -294,12 +296,22 @@ class TaskService {
                 where: { parent_task_id: task.id, completed_at: { [Op.not]: null } }
             });
 
+            const commentCount = await Comment.count({
+                where: { task_id: task.id }
+            });
+
+            const attachmentCount = await Attachment.count({
+                where: { task_id: task.id }
+            });
+
             const taskData = task.toJSON();
 
             return {
                 ...taskData,
                 subtask_count: subtaskCount,
                 completed_subtasks: completedSubtasks,
+                comment_count: commentCount,
+                attachment_count: attachmentCount,
                 assignees: taskData.assignees?.map(a => ({
                     id: a.id,
                     user: a.projectMember?.workspaceMember?.user,
@@ -425,12 +437,22 @@ class TaskService {
             where: { parent_task_id: taskId, completed_at: { [Op.not]: null } }
         });
 
+        const commentCount = await Comment.count({
+            where: { task_id: taskId }
+        });
+
+        const attachmentCount = await Attachment.count({
+            where: { task_id: taskId }
+        });
+
         const taskData = task.toJSON();
 
         return {
             ...taskData,
             subtask_count: subtaskCount,
             completed_subtasks: completedSubtasks,
+            comment_count: commentCount,
+            attachment_count: attachmentCount,
             assignees: taskData.assignees?.map(a => ({
                 id: a.id,
                 project_member_id: a.project_member_id,
@@ -1458,6 +1480,65 @@ class TaskService {
                 })) || []
             };
         });
+    }
+    async addAttachment(taskId, userId, fileData) {
+        const task = await Task.findByPk(taskId);
+        if (!task) {
+            const error = new Error('Task not found');
+            error.status = 404;
+            throw error;
+        }
+
+        const attachment = await Attachment.create({
+            task_id: taskId,
+            uploaded_by: userId,
+            file_url: fileData.path || fileData.url, // multer-storage-cloudinary provides path
+            file_name: fileData.originalname || fileData.file_name,
+            file_size: fileData.size || fileData.file_size,
+            mime_type: fileData.mimetype || fileData.mime_type
+        });
+
+        return attachment;
+    }
+
+    async getAttachments(taskId) {
+        return await Attachment.findAll({
+            where: { task_id: taskId },
+            include: [{
+                model: User,
+                as: 'uploader',
+                attributes: ['id', 'name', 'avatar_url']
+            }],
+            order: [['created_at', 'DESC']]
+        });
+    }
+
+    async deleteAttachment(attachmentId, userId) {
+        const attachment = await Attachment.findByPk(attachmentId);
+        if (!attachment) {
+            const error = new Error('Attachment not found');
+            error.status = 404;
+            throw error;
+        }
+
+        // Logic for checking permissions could go here (e.g., only uploader or project admin can delete)
+        
+        // Optional: Delete from Cloudinary as well
+        if (attachment.file_url) {
+            try {
+                // Extract public_id from URL
+                const urlParts = attachment.file_url.split('/');
+                const lastPart = urlParts[urlParts.length - 1];
+                const publicId = lastPart.split('.')[0];
+                const folder = 'Cronos Ai';
+                await cloudinary.uploader.destroy(`${folder}/${publicId}`);
+            } catch (err) {
+                console.error('Failed to delete asset from Cloudinary:', err);
+            }
+        }
+
+        await attachment.destroy();
+        return true;
     }
 }
 

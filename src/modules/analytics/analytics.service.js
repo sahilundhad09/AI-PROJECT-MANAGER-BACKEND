@@ -170,7 +170,12 @@ class AnalyticsService {
             include: [{
                 model: Task,
                 as: 'tasks',
-                attributes: ['status', 'priority']
+                attributes: ['priority'],
+                include: [{
+                    model: TaskStatus,
+                    as: 'status',
+                    attributes: ['name', 'is_completed']
+                }]
             }]
         });
 
@@ -182,7 +187,15 @@ class AnalyticsService {
         Active Projects: ${stats.activeProjects}
         
         Project Breakdown:
-        ${projects.map(p => `- ${p.name}: ${p.tasks.length} tasks`).join('\n')}
+        ${projects.map(p => {
+            const statusCounts = {};
+            p.tasks.forEach(t => {
+                const s = t.status?.name || 'Unknown';
+                statusCounts[s] = (statusCounts[s] || 0) + 1;
+            });
+            const statusStr = Object.entries(statusCounts).map(([s, c]) => `${c} ${s}`).join(', ');
+            return `- ${p.name}: ${p.tasks.length} tasks (${statusStr})`;
+        }).join('\n')}
         
         Provide:
         1. A high-level executive summary (2 sentences).
@@ -564,6 +577,226 @@ class AnalyticsService {
             timestamp: activity.created_at,
             meta: activity.meta
         }));
+    }
+    /**
+     * Get individual growth metrics
+     */
+    async getIndividualGrowth(userId, workspaceId = null) {
+        const whereClause = { archived_at: null };
+        const workspaceMemberWhere = { user_id: userId };
+        if (workspaceId) {
+            workspaceMemberWhere.workspace_id = workspaceId;
+        }
+
+        // Get all project memberships across relevant workspaces
+        const workspaceMembers = await WorkspaceMember.findAll({
+            where: workspaceMemberWhere,
+            include: [{
+                model: ProjectMember,
+                as: 'projectMemberships',
+                attributes: ['id']
+            }]
+        });
+
+        const projectMemberIds = workspaceMembers.flatMap(wm => 
+            wm.projectMemberships.map(pm => pm.id)
+        );
+
+        if (projectMemberIds.length === 0) {
+            return {
+                velocity: [],
+                focusArea: { todo: 0, inProgress: 0, done: 0 },
+                consistency: { streak: 0, totalActiveDays: 0 },
+                performance: { onTimeRate: 0, avgCompletionDays: 0 }
+            };
+        }
+
+        // Get tasks assigned to user
+        const assignments = await TaskAssignee.findAll({
+            where: { project_member_id: projectMemberIds },
+            attributes: ['task_id']
+        });
+        const taskIds = [...new Set(assignments.map(a => a.task_id))];
+
+        const tasks = await Task.findAll({
+            where: { id: taskIds, ...whereClause },
+            include: [{
+                model: TaskStatus,
+                as: 'status',
+                attributes: ['is_completed', 'is_default']
+            }]
+        });
+
+        // 1. Velocity (Last 6 weeks)
+        const velocity = [];
+        for (let i = 5; i >= 0; i--) {
+            const start = new Date();
+            start.setDate(start.getDate() - (i * 7 + 7));
+            const end = new Date();
+            end.setDate(end.getDate() - (i * 7));
+            
+            const completedInWeek = tasks.filter(t => 
+                t.completed_at && new Date(t.completed_at) >= start && new Date(t.completed_at) < end
+            ).length;
+
+            velocity.push({
+                week: `Week ${6-i}`,
+                completed: completedInWeek,
+                label: `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+            });
+        }
+
+        // 2. Focus Area
+        const focusArea = {
+            todo: tasks.filter(t => t.status?.is_default).length,
+            done: tasks.filter(t => t.status?.is_completed).length,
+            inProgress: tasks.filter(t => !t.status?.is_default && !t.status?.is_completed).length
+        };
+
+        // 3. Consistency (from ActivityLog)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const logs = await ActivityLog.findAll({
+            where: {
+                actor_id: userId,
+                created_at: { [Op.gte]: thirtyDaysAgo }
+            },
+            attributes: ['created_at'],
+            order: [['created_at', 'DESC']]
+        });
+
+        const activeDays = [...new Set(logs.map(l => 
+            new Date(l.created_at).toISOString().split('T')[0]
+        ))];
+
+        // Calculate Streak
+        let streak = 0;
+        let today = new Date().toISOString().split('T')[0];
+        let checkDate = new Date();
+        
+        while (activeDays.includes(checkDate.toISOString().split('T')[0])) {
+            streak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+        }
+
+        // 4. Performance
+        const completedTasks = tasks.filter(t => t.completed_at);
+        const onTimeTasks = completedTasks.filter(t => 
+            !t.due_date || new Date(t.completed_at) <= new Date(t.due_date)
+        );
+        
+        const onTimeRate = completedTasks.length > 0 
+            ? Math.round((onTimeTasks.length / completedTasks.length) * 100) 
+            : 0;
+
+        const totalDaysToComplete = completedTasks.reduce((acc, t) => {
+            const created = new Date(t.created_at);
+            const completed = new Date(t.completed_at);
+            return acc + (completed - created) / (1000 * 60 * 60 * 24);
+        }, 0);
+
+        const avgCompletionDays = completedTasks.length > 0 
+            ? Math.round((totalDaysToComplete / completedTasks.length) * 10) / 10 
+            : 0;
+
+        return {
+            velocity,
+            focusArea,
+            consistency: {
+                streak,
+                totalActiveDays: activeDays.length,
+                activeDays
+            },
+            performance: {
+                onTimeRate,
+                avgCompletionDays
+            }
+        };
+    }
+
+    /**
+     * Get workspace-wide growth (for owners/admins)
+     */
+    async getWorkspaceGrowth(workspaceId) {
+        const members = await WorkspaceMember.findAll({
+            where: { workspace_id: workspaceId },
+            include: [{
+                model: User,
+                as: 'user',
+                attributes: ['id', 'name', 'avatar_url', 'email']
+            }]
+        });
+
+        const memberGrowth = await Promise.all(members.map(async (member) => {
+            const performance = await this.getIndividualGrowth(member.user_id, workspaceId);
+            return {
+                id: member.user_id,
+                name: member.user.name,
+                avatar_url: member.user.avatar_url,
+                email: member.user.email,
+                role: member.role,
+                metrics: {
+                    completedTasks: performance.focusArea.done,
+                    velocity: performance.velocity.reduce((acc, v) => acc + v.completed, 0),
+                    streak: performance.consistency.streak,
+                    onTimeRate: performance.performance.onTimeRate
+                }
+            };
+        }));
+
+        return memberGrowth;
+    }
+
+    /**
+     * Get project-specific growth
+     */
+    async getProjectGrowth(projectId) {
+        const members = await ProjectMember.findAll({
+            where: { project_id: projectId },
+            include: [{
+                model: WorkspaceMember,
+                as: 'workspaceMember',
+                include: [{
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'name', 'avatar_url']
+                }]
+            }]
+        });
+
+        const memberGrowth = await Promise.all(members.map(async (member) => {
+            // Here we need to filter by specific project tasks
+            const assignments = await TaskAssignee.findAll({
+                where: { project_member_id: member.id },
+                include: [{
+                    model: Task,
+                    as: 'task',
+                    where: { project_id: projectId, archived_at: null },
+                    include: [{
+                        model: TaskStatus,
+                        as: 'status'
+                    }]
+                }]
+            });
+
+            const tasks = assignments.map(a => a.task);
+            const completed = tasks.filter(t => t.status?.is_completed).length;
+
+            return {
+                id: member.workspaceMember.user.id,
+                name: member.workspaceMember.user.name,
+                avatar_url: member.workspaceMember.user.avatar_url,
+                role: member.project_role,
+                metrics: {
+                    assigned: tasks.length,
+                    completed: completed,
+                    completionRate: tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0
+                }
+            };
+        }));
+
+        return memberGrowth;
     }
 }
 

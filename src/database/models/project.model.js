@@ -28,6 +28,10 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING(7),
             allowNull: true
         },
+        image_url: {
+            type: DataTypes.STRING(500),
+            allowNull: true
+        },
         start_date: {
             type: DataTypes.DATE,
             allowNull: true

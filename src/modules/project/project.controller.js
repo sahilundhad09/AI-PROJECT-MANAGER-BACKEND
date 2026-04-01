@@ -355,12 +355,37 @@ const acceptProjectInvitation = async (req, res, next) => {
     }
 };
 
+const updateProjectImage = async (req, res, next) => {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id;
+
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No image file provided'
+            });
+        }
+
+        const project = await projectService.updateProjectImage(projectId, userId, req.file.path);
+
+        res.json({
+            success: true,
+            message: 'Project image updated successfully',
+            data: project
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     // Project CRUD
     createProject,
     getWorkspaceProjects,
     getProjectById,
     updateProject,
+    updateProjectImage,
     archiveProject,
     deleteProject,
 

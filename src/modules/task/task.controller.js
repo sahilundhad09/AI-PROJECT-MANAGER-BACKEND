@@ -325,6 +325,61 @@ const getSubtasks = async (req, res, next) => {
     }
 };
 
+// Task Attachment Controllers
+
+const uploadAttachment = async (req, res, next) => {
+    try {
+        const { taskId } = req.params;
+        const userId = req.user.id;
+        
+        if (!req.file) {
+            const error = new Error('No file uploaded');
+            error.status = 400;
+            throw error;
+        }
+
+        const attachment = await taskService.addAttachment(taskId, userId, req.file);
+        
+        // Emit real-time event
+        emitTaskEvent(null, 'task:attachment_added', { taskId, attachment });
+
+        res.status(201).json({
+            success: true,
+            message: 'Attachment uploaded successfully',
+            data: attachment
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const getTaskAttachments = async (req, res, next) => {
+    try {
+        const { taskId } = req.params;
+        const attachments = await taskService.getAttachments(taskId);
+        res.json({
+            success: true,
+            data: attachments
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const deleteAttachment = async (req, res, next) => {
+    try {
+        const { attachmentId } = req.params;
+        const userId = req.user.id;
+        await taskService.deleteAttachment(attachmentId, userId);
+        res.json({
+            success: true,
+            message: 'Attachment deleted successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createTask,
     getProjectTasks,
@@ -345,5 +400,8 @@ module.exports = {
     searchTasks,
     getMyTasks,
     createSubtask,
-    getSubtasks
+    getSubtasks,
+    uploadAttachment,
+    getTaskAttachments,
+    deleteAttachment
 };

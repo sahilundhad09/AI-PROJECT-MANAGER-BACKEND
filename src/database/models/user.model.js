@@ -45,6 +45,22 @@ module.exports = (sequelize) => {
             validate: {
                 isIn: [['active', 'inactive', 'suspended']]
             }
+        },
+        reset_password_token: {
+            type: DataTypes.TEXT,
+            allowNull: true
+        },
+        reset_password_expires: {
+            type: DataTypes.DATE,
+            allowNull: true
+        },
+        reset_otp_code: {
+            type: DataTypes.STRING(6),
+            allowNull: true
+        },
+        reset_otp_expires_at: {
+            type: DataTypes.DATE,
+            allowNull: true
         }
     }, {
         tableName: 'users',

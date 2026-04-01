@@ -53,7 +53,7 @@ class AuthController {
 
     /**
      * Refresh access token
-     * POST /api/v1/auth/refresh
+     * POST /api/v1/auth/refresh-token
      */
     async refreshToken(req, res, next) {
         try {
@@ -134,6 +134,85 @@ class AuthController {
             res.json({
                 success: true,
                 message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Forgot password
+     * POST /api/v1/auth/forgot-password
+     */
+    async forgotPassword(req, res, next) {
+        try {
+            const { email } = req.body;
+            const result = await authService.forgotPassword(email);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Verify reset OTP
+     * POST /api/v1/auth/verify-reset-otp
+     */
+    async verifyResetOTP(req, res, next) {
+        try {
+            const { email, otp } = req.body;
+            const result = await authService.verifyResetOTP(email, otp);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Reset password
+     * POST /api/v1/auth/reset-password
+     */
+    async resetPassword(req, res, next) {
+        try {
+            const { email, otp, newPassword } = req.body;
+            const result = await authService.resetPassword(email, otp, newPassword);
+
+            res.json({
+                success: true,
+                message: result.message
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Update user avatar
+     * POST /api/v1/auth/profile/avatar
+     */
+    async updateAvatar(req, res, next) {
+        try {
+            if (!req.file) {
+                const error = new Error('No avatar file provided');
+                error.statusCode = 400;
+                throw error;
+            }
+
+            const avatarUrl = req.file.path; // Cloudinary URL returned by multer-storage-cloudinary
+            const user = await authService.updateAvatar(req.user.id, avatarUrl);
+
+            res.json({
+                success: true,
+                message: 'Avatar updated successfully',
+                data: user
             });
         } catch (error) {
             next(error);

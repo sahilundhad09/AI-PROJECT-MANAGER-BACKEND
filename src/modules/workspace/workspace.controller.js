@@ -280,6 +280,37 @@ class WorkspaceController {
             next(error);
         }
     }
+
+    /**
+     * Upload workspace logo
+     */
+    async uploadWorkspaceLogo(req, res, next) {
+        try {
+            const { workspaceId } = req.params;
+            const userId = req.user.userId;
+
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No logo file provided'
+                });
+            }
+
+            const workspace = await workspaceService.updateWorkspaceLogo(
+                workspaceId,
+                userId,
+                req.file.path
+            );
+
+            res.json({
+                success: true,
+                message: 'Workspace logo uploaded successfully',
+                data: workspace
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new WorkspaceController();

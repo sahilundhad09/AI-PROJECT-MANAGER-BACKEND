@@ -1,26 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('./auth.controller');
-const authMiddleware = require('../../shared/middleware/auth.middleware');
-const { validateBody } = require('../../shared/middleware/validator.middleware');
-const { authLimiter } = require('../../shared/middleware/rateLimiter.middleware');
-const {
-    registerSchema,
-    loginSchema,
-    refreshTokenSchema,
-    updateProfileSchema,
-    changePasswordSchema
-} = require('./auth.validator');
+const authValidator = require('./auth.validator');
+const { validate } = require('../../shared/middleware/validator.middleware');
+const authenticate = require('../../shared/middleware/auth.middleware');
+const upload = require('../../shared/utils/fileUpload');
 
-// Public routes (with rate limiting)
-router.post('/register', authLimiter, validateBody(registerSchema), authController.register);
-router.post('/login', authLimiter, validateBody(loginSchema), authController.login);
-router.post('/refresh', validateBody(refreshTokenSchema), authController.refreshToken);
-router.post('/logout', validateBody(refreshTokenSchema), authController.logout);
+// Public routes
+router.post('/register', validate(authValidator.registerSchema), authController.register);
+router.post('/login', validate(authValidator.loginSchema), authController.login);
+router.post('/refresh-token', validate(authValidator.refreshTokenSchema), authController.refreshToken);
+router.post('/logout', authController.logout);
 
-// Protected routes (require authentication)
-router.get('/profile', authMiddleware, authController.getProfile);
-router.put('/profile', authMiddleware, validateBody(updateProfileSchema), authController.updateProfile);
-router.post('/change-password', authMiddleware, validateBody(changePasswordSchema), authController.changePassword);
+// Password recovery routes
+router.post('/forgot-password', validate(authValidator.forgotPasswordSchema), authController.forgotPassword);
+router.post('/verify-reset-otp', validate(authValidator.verifyResetOTPSchema), authController.verifyResetOTP);
+router.post('/reset-password', validate(authValidator.resetPasswordSchema), authController.resetPassword);
+
+// Protected routes
+router.get('/profile', authenticate, authController.getProfile);
+router.put('/profile', authenticate, validate(authValidator.updateProfileSchema), authController.updateProfile);
+router.post('/change-password', authenticate, validate(authValidator.changePasswordSchema), authController.changePassword);
+
+// Image Upload
+router.post('/profile/avatar', authenticate, upload.single('avatar'), authController.updateAvatar);
 
 module.exports = router;
